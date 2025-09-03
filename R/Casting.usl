@@ -1,0 +1,70 @@
+// Prueba de Widening Casting (Automático)
+
+System.out.println("=== Pruebas de Widening Casting ===");
+
+// char -> int
+char letra = 'A';
+int codigo = letra;  // Automático: char -> int
+System.out.println("char 'A' -> int: " + codigo);
+
+// int -> float  
+int entero = 42;
+float flotante = entero;  // Automático: int -> float
+System.out.println("int 42 -> float: " + flotante);
+
+// float -> double
+float decimal = 3.14f;
+double doble = decimal;  // Automático: float -> double
+System.out.println("float 3.14 -> double: " + doble);
+
+// Cadena de conversiones: char -> int -> float -> double
+char caracter = 'Z';
+int codigoChar = caracter;
+float flotanteChar = codigoChar;
+double dobleChar = flotanteChar;
+
+System.out.println("Cadena de conversiones:");
+System.out.println("char 'Z': " + caracter);
+System.out.println("-> int: " + codigoChar);
+System.out.println("-> float: " + flotanteChar);
+System.out.println("-> double: " + dobleChar);
+
+// Prueba de Narrowing Casting (Manual)
+
+System.out.println("=== Pruebas de Narrowing Casting ===");
+
+// double -> float
+double dobleNum = 3.14159265359;
+float flotanteNum = (float) dobleNum;  // Manual: double -> float
+System.out.println("double 3.14159265359 -> float: " + flotanteNum);
+
+// float -> int (trunca hacia abajo)
+float decimal = 5.9f;
+int entero = (int) decimal;  // Manual: float -> int, trunca
+System.out.println("float 5.9 -> int: " + entero);
+
+// int -> char
+int codigoAscii = 65;
+char letra = (char) codigoAscii;  // Manual: int -> char
+System.out.println("int 65 -> char: " + letra);
+
+// Ejemplos con truncamiento
+float positivo = 7.8f;
+int enteroPositivo = (int) positivo;
+System.out.println("float 7.8 -> int: " + enteroPositivo);
+
+float negativo = -2.3f;
+int enteroNegativo = (int) negativo;
+System.out.println("float -2.3 -> int: " + enteroNegativo);
+
+// Cadena de conversiones hacia abajo: double -> float -> int -> char
+double granNumero = 72.99;
+float medioNumero = (float) granNumero;
+int pequenoNumero = (int) medioNumero;
+char caracterFinal = (char) pequenoNumero;
+
+System.out.println("Cadena de conversiones hacia abajo:");
+System.out.println("double 72.99: " + granNumero);
+System.out.println("-> float: " + medioNumero);
+System.out.println("-> int: " + pequenoNumero);
+System.out.println("-> char: " + caracterFinal);

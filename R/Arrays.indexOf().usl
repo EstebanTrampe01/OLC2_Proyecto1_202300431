@@ -1,0 +1,10 @@
+public static void main(String[] args) {
+    int nums[] = { 4, 7, 9, 7, 12 };
+    int idx1 = Arrays.indexOf(nums, 7);
+    int idx2 = Arrays.indexOf(nums, 12);
+    int idx3 = Arrays.indexOf(nums, 99);
+
+    System.out.println("Índice de 7: " + idx1);   // 1 (primera ocurrencia)
+    System.out.println("Índice de 12: " + idx2);  // 4
+    System.out.println("Índice de 99: " + idx3);  // -1
+}

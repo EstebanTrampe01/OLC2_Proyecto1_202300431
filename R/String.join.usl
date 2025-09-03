@@ -1,0 +1,24 @@
+// Ejemplo de uso de String.join
+public static void main(String[] args) {
+    // Ejemplo 1: join con elementos individuales
+    String fecha = String.join("-", "2025", "08", "03");
+    System.out.println("Fecha formateada: " + fecha);
+    
+    // Ejemplo 2: join con array
+    String[] frutas = { "manzana", "banana", "cereza" };
+    String csv = String.join(",", frutas);
+    System.out.println("Lista CSV: " + csv);
+    
+    // Ejemplo 3: join con valores numéricos
+    String nums = String.join(" | ", "10", "20", "30");
+    System.out.println("Números separados: " + nums);
+    
+    // Ejemplo 4: join con delimitador vacío
+    String unido = String.join("", "a", "b", "c");
+    System.out.println("Unidos sin delimitador: " + unido);
+    
+    // Ejemplo 5: join con array vacío
+    String[] vacio = {};
+    String resultadoVacio = String.join("*", vacio);
+    System.out.println("Array vacío: '" + resultadoVacio + "'");
+}

@@ -1,0 +1,67 @@
+// ===== DECLARACIONES DE VARIABLES =====
+        // Tipos enteros
+        int valorint = 10;
+        int valorint = 500;
+        int valorInt = 1000;
+        int valorint = 50000;
+        
+        // Tipos de punto flotante
+        float valorFloat = 25.5f;
+        double valorDouble = 100.75;
+        
+        System.out.println("=== VALORES INICIALES ===");
+        System.out.println("int: " + valorint);
+        System.out.println("int: " + valorint);
+        System.out.println("Int: " + valorInt);
+        System.out.println("int: " + valorint);
+        System.out.println("Float: " + valorFloat);
+        System.out.println("Double: " + valorDouble);
+        
+        // ===== OPERACIONES DE SUMA =====
+        System.out.println("\n=== OPERACIONES DE SUMA ===");
+        System.out.println("int + int: " + (valorint + valorint));
+        System.out.println("int + Int: " + (valorint + valorInt));
+        System.out.println("Int + int: " + (valorInt + valorint));
+        System.out.println("int + Float: " + (valorint + valorFloat));
+        System.out.println("Float + Double: " + (valorFloat + valorDouble));
+        System.out.println("int + Double: " + (valorint + valorDouble));
+        
+        // ===== OPERACIONES DE RESTA =====
+        System.out.println("\n=== OPERACIONES DE RESTA ===");
+        System.out.println("int - Int: " + (valorint - valorInt));
+        System.out.println("Int - int: " + (valorInt - valorint));
+        System.out.println("int - int: " + (valorint - valorint));
+        System.out.println("Double - Float: " + (valorDouble - valorFloat));
+        System.out.println("Float - Int: " + (valorFloat - valorInt));
+        
+        // ===== OPERACIONES DE MULTIPLICACIÓN =====
+        System.out.println("\n=== OPERACIONES DE MULTIPLICACIÓN ===");
+        System.out.println("int * int: " + (valorint * valorint));
+        System.out.println("int * 2: " + (valorint * 2));
+        System.out.println("Int * Float: " + (valorInt * valorFloat));
+        System.out.println("int * Double: " + (valorint * valorDouble));
+        System.out.println("int * Double: " + (valorint * valorDouble));
+        
+        // ===== OPERACIONES DE DIVISIÓN =====
+        System.out.println("\n=== OPERACIONES DE DIVISIÓN ===");
+        System.out.println("int / Int: " + (valorint / valorInt));
+        System.out.println("Int / int: " + (valorInt / valorint));
+        System.out.println("Double / Float: " + (valorDouble / valorFloat));
+        System.out.println("Float / 2: " + (valorFloat / 2));
+        System.out.println("int / int: " + (valorint / valorint));
+        
+        // ===== OPERACIONES DE MÓDULO (solo enteros) =====
+        System.out.println("\n=== OPERACIONES DE MÓDULO ===");
+        System.out.println("int % Int: " + (valorint % valorInt));
+        System.out.println("Int % int: " + (valorInt % valorint));
+        System.out.println("int % int: " + (valorint % valorint));
+        System.out.println("int % 7: " + (valorint % 7));
+        
+        // ===== OPERACIONES CON LITERALES =====
+        System.out.println("\n=== OPERACIONES CON LITERALES ===");
+        System.out.println("100 + 50: " + (100 + 50));
+        System.out.println("25.5 * 2.0: " + (25.5 * 2.0));
+        System.out.println("1000 - 250: " + (1000 - 250));
+        System.out.println("15 + 5: " + (15 + 5));
+        
+        System.out.println("\n=== FIN DE PRUEBAS ARITMÉTICAS ===");

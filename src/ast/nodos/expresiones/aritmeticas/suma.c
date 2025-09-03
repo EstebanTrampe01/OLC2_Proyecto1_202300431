@@ -1,0 +1,247 @@
+#include "ast/AbstractExpresion.h"
+#include "ast/nodos/builders.h"
+#include "context/context.h"
+#include "context/result.h"
+#include "aritmeticas.h"
+#include "ast/nodos/expresiones/expresiones.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+Result sumarIntInt(ExpresionLenguaje* self) {
+    int* res = malloc(sizeof(int));
+    *res =  *((int*)self->izquierda.valor) + *((int*)self->derecha.valor);
+    // fprintf(stderr, "[DBG SUM] %d + %d = %d\n", *((int*)self->izquierda.valor), *((int*)self->derecha.valor), *res);
+    return nuevoValorResultado(res, INT);
+}
+
+Result sumarFloatFloat(ExpresionLenguaje* self) {
+    float* res = malloc(sizeof(float));
+    *res = *((float*)self->izquierda.valor) + *((float*)self->derecha.valor);
+    return nuevoValorResultado(res, FLOAT);
+}
+
+Result sumarIntFloat(ExpresionLenguaje* self) {
+    float* res = malloc(sizeof(float));
+    *res = *((int*)self->izquierda.valor) + *((float*)self->derecha.valor);
+    return nuevoValorResultado(res, FLOAT);
+}
+
+Result sumarFloatInt(ExpresionLenguaje* self) {
+    float* res = malloc(sizeof(float));
+    *res = *((float*)self->izquierda.valor) + *((int*)self->derecha.valor);
+    return nuevoValorResultado(res, FLOAT);
+}
+// --- NUEVAS FUNCIONES DOUBLE ---
+static Result sumarIntDouble(ExpresionLenguaje* self){ double* r=malloc(sizeof(double)); *r = (double)(*((int*)self->izquierda.valor)) + *((double*)self->derecha.valor); return nuevoValorResultado(r, DOUBLE);} 
+static Result sumarDoubleInt(ExpresionLenguaje* self){ double* r=malloc(sizeof(double)); *r = *((double*)self->izquierda.valor) + (double)(*((int*)self->derecha.valor)); return nuevoValorResultado(r, DOUBLE);} 
+static Result sumarFloatDouble(ExpresionLenguaje* self){ double* r=malloc(sizeof(double)); *r = (double)(*((float*)self->izquierda.valor)) + *((double*)self->derecha.valor); return nuevoValorResultado(r, DOUBLE);} 
+static Result sumarDoubleFloat(ExpresionLenguaje* self){ double* r=malloc(sizeof(double)); *r = *((double*)self->izquierda.valor) + (double)(*((float*)self->derecha.valor)); return nuevoValorResultado(r, DOUBLE);} 
+static Result sumarDoubleDouble(ExpresionLenguaje* self){ double* r=malloc(sizeof(double)); *r = *((double*)self->izquierda.valor) + *((double*)self->derecha.valor); return nuevoValorResultado(r, DOUBLE);} 
+
+Result sumarStringString(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    size_t len = strlen(left) + strlen(right) + 1;
+    char* res = malloc(len);
+    strcpy(res, left);
+    strcat(res, right);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarStringInt(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    int right = *(int*)self->derecha.valor;
+    char buf[32];
+    sprintf(buf, "%d", right);
+    size_t len = strlen(left) + strlen(buf) + 1;
+    char* res = malloc(len);
+    strcpy(res, left);
+    strcat(res, buf);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarStringFloat(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    float right = *(float*)self->derecha.valor;
+    char buf[32];
+    sprintf(buf, "%f", right);
+    size_t len = strlen(left) + strlen(buf) + 1;
+    char* res = malloc(len);
+    strcpy(res, left);
+    strcat(res, buf);
+    return nuevoValorResultado(res, STRING);
+}
+Result sumarStringDouble(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    double right = *(double*)self->derecha.valor;
+    char buf[64];
+    sprintf(buf, "%g", right);
+    size_t len = strlen(left) + strlen(buf) + 1;
+    char* res = malloc(len);
+    strcpy(res, left);
+    strcat(res, buf);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarStringBoolean(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    int right = *(int*)self->derecha.valor;
+    char* boolStr = right ? "true" : "false";
+    size_t len = strlen(left) + strlen(boolStr) + 1;
+    char* res = malloc(len);
+    strcpy(res, left);
+    strcat(res, boolStr);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarStringChar(ExpresionLenguaje* self) {
+    char* left = (char*)self->izquierda.valor;
+    char right = *(char*)self->derecha.valor;
+    size_t len = strlen(left) + 2;
+    char* res = malloc(len);
+    strcpy(res, left);
+    res[strlen(left)] = right;
+    res[strlen(left) + 1] = '\0';
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarIntString(ExpresionLenguaje* self) {
+    int left = *(int*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    char buf[32];
+    sprintf(buf, "%d", left);
+    size_t len = strlen(buf) + strlen(right) + 1;
+    char* res = malloc(len);
+    strcpy(res, buf);
+    strcat(res, right);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarFloatString(ExpresionLenguaje* self) {
+    float left = *(float*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    char buf[32];
+    sprintf(buf, "%f", left);
+    size_t len = strlen(buf) + strlen(right) + 1;
+    char* res = malloc(len);
+    strcpy(res, buf);
+    strcat(res, right);
+    return nuevoValorResultado(res, STRING);
+}
+Result sumarDoubleString(ExpresionLenguaje* self) {
+    double left = *(double*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    char buf[64];
+    sprintf(buf, "%g", left);
+    size_t len = strlen(buf) + strlen(right) + 1;
+    char* res = malloc(len);
+    strcpy(res, buf);
+    strcat(res, right);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarBooleanString(ExpresionLenguaje* self) {
+    int left = *(int*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    char* boolStr = left ? "true" : "false";
+    size_t len = strlen(boolStr) + strlen(right) + 1;
+    char* res = malloc(len);
+    strcpy(res, boolStr);
+    strcat(res, right);
+    return nuevoValorResultado(res, STRING);
+}
+
+Result sumarCharString(ExpresionLenguaje* self) {
+    char left = *(char*)self->izquierda.valor;
+    char* right = (char*)self->derecha.valor;
+    size_t len = 2 + strlen(right);
+    char* res = malloc(len);
+    res[0] = left;
+    strcpy(res + 1, right);
+    return nuevoValorResultado(res, STRING);
+}
+
+static Result sumarCharChar(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = (int)(*((char*)self->izquierda.valor)) + (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, INT);} 
+static Result sumarCharInt(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = (int)(*((char*)self->izquierda.valor)) + *((int*)self->derecha.valor); return nuevoValorResultado(res, INT);} 
+static Result sumarIntChar(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = *((int*)self->izquierda.valor) + (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, INT);} 
+static Result sumarCharFloat(ExpresionLenguaje* self){ float* res=malloc(sizeof(float)); *res = (float)(*((char*)self->izquierda.valor)) + *((float*)self->derecha.valor); return nuevoValorResultado(res, FLOAT);} 
+static Result sumarFloatChar(ExpresionLenguaje* self){ float* res=malloc(sizeof(float)); *res = *((float*)self->izquierda.valor) + (float)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, FLOAT);} 
+static Result sumarCharDouble(ExpresionLenguaje* self){ double* res=malloc(sizeof(double)); *res = (double)(*((char*)self->izquierda.valor)) + *((double*)self->derecha.valor); return nuevoValorResultado(res, DOUBLE);} 
+static Result sumarDoubleChar(ExpresionLenguaje* self){ double* res=malloc(sizeof(double)); *res = *((double*)self->izquierda.valor) + (double)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, DOUBLE);} 
+
+Operacion tablaOperacionesSuma[TIPO_COUNT][TIPO_COUNT] = {
+    [INT][INT] = sumarIntInt,
+    [FLOAT][FLOAT] = sumarFloatFloat,
+    [INT][FLOAT] = sumarIntFloat,
+    [FLOAT][INT] = sumarFloatInt,
+    [STRING][STRING] = sumarStringString,
+    [STRING][INT] = sumarStringInt,
+    [STRING][FLOAT] = sumarStringFloat,
+    [STRING][DOUBLE] = sumarStringDouble,
+    [STRING][BOOLEAN] = sumarStringBoolean,
+    [STRING][CHAR] = sumarStringChar,
+    [INT][STRING] = sumarIntString,
+    [FLOAT][STRING] = sumarFloatString,
+    [BOOLEAN][STRING] = sumarBooleanString,
+    [CHAR][STRING] = sumarCharString,
+    [CHAR][CHAR] = sumarCharChar,
+    [CHAR][INT] = sumarCharInt,
+    [INT][CHAR] = sumarIntChar,
+    [CHAR][FLOAT] = sumarCharFloat,
+    [FLOAT][CHAR] = sumarFloatChar,
+    [CHAR][DOUBLE] = sumarCharDouble,
+    [DOUBLE][CHAR] = sumarDoubleChar,
+    // Mapeo de tipos conceptuales a tipos internos
+    [BYTE][BYTE] = sumarIntInt,
+    [BYTE][SHORT] = sumarIntInt,
+    [BYTE][INT] = sumarIntInt,
+    [BYTE][LONG] = sumarIntInt,
+    [BYTE][FLOAT] = sumarIntFloat,
+    [BYTE][DOUBLE] = sumarIntFloat,
+    [SHORT][BYTE] = sumarIntInt,
+    [SHORT][SHORT] = sumarIntInt,
+    [SHORT][INT] = sumarIntInt,
+    [SHORT][LONG] = sumarIntInt,
+    [SHORT][FLOAT] = sumarIntFloat,
+    [SHORT][DOUBLE] = sumarIntFloat,
+    [LONG][BYTE] = sumarIntInt,
+    [LONG][SHORT] = sumarIntInt,
+    [LONG][INT] = sumarIntInt,
+    [LONG][LONG] = sumarIntInt,
+    [LONG][FLOAT] = sumarIntFloat,
+    [LONG][DOUBLE] = sumarIntFloat,
+    [DOUBLE][BYTE] = sumarDoubleInt,
+    [DOUBLE][SHORT] = sumarDoubleInt,
+    [DOUBLE][INT] = sumarDoubleInt,
+    [DOUBLE][LONG] = sumarDoubleInt,
+    [DOUBLE][FLOAT] = sumarDoubleFloat,
+    [DOUBLE][DOUBLE] = sumarDoubleDouble,
+    [INT][BYTE] = sumarIntInt,
+    [INT][SHORT] = sumarIntInt,
+    [INT][LONG] = sumarIntInt,
+    [INT][DOUBLE] = sumarIntDouble,
+    [FLOAT][BYTE] = sumarFloatInt,
+    [FLOAT][SHORT] = sumarFloatInt,
+    [FLOAT][LONG] = sumarFloatInt,
+    [FLOAT][DOUBLE] = sumarFloatDouble,
+    [DOUBLE][STRING] = sumarDoubleString,
+    // (ya cubierto arriba) [DOUBLE][LONG] duplicado eliminado
+    [BYTE][DOUBLE] = sumarIntDouble,
+    [SHORT][DOUBLE] = sumarIntDouble,
+    [LONG][DOUBLE] = sumarIntDouble,
+    [STRING][BYTE] = sumarStringInt,
+    [STRING][SHORT] = sumarStringInt,
+    [STRING][LONG] = sumarStringInt,
+    [BYTE][STRING] = sumarIntString,
+    [SHORT][STRING] = sumarIntString,
+    [LONG][STRING] = sumarIntString,
+};
+
+//builders.h
+AbstractExpresion* nuevoSumaExpresion(AbstractExpresion* izquierda, AbstractExpresion* derecha) {
+    ExpresionLenguaje* sumaExpresion = nuevoExpresionLenguaje(interpretExpresionLenguaje, izquierda, derecha);
+    sumaExpresion->tablaOperaciones = &tablaOperacionesSuma;
+    return (AbstractExpresion*) sumaExpresion;
+}
