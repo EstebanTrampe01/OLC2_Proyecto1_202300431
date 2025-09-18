@@ -9,6 +9,5 @@ Autor: Juan Esteban Chacón Trampe — 202300431
 
 ## Manuales
 
-- Informe técnico: `manuales/InformeTecnico.md`
+- Manual técnico: `manuales/ManualTecnico.md`
 - Manual de usuario: `manuales/ManualUsuario.md`
-- Plan de pruebas: `manuales/PlanPruebas.md`
