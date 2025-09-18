@@ -2,6 +2,8 @@
 #define FOR_EXPRESION_H
 
 #include "../../../AbstractExpresion.h"
+#include "context/context.h"
+#include "context/result.h"
 
 typedef struct {
     AbstractExpresion base;
@@ -12,5 +14,8 @@ typedef struct {
 } ForExpresion;
 
 AbstractExpresion* nuevoForExpresion(AbstractExpresion* initialization, AbstractExpresion* condition, AbstractExpresion* increment, AbstractExpresion* body);
+
+// Intérprete del nodo For (declarado para identificación en AST DOT)
+Result interpretForExpresion(AbstractExpresion*, Context*);
 
 #endif

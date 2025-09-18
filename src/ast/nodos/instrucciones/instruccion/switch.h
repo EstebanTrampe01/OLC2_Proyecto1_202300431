@@ -14,4 +14,8 @@ typedef struct {
 
 AbstractExpresion* nuevoSwitchExpresion(AbstractExpresion* expresion, AbstractExpresion* casos, AbstractExpresion* casoDefault);
 
+// Intérpretes de nodos Switch/Case (declarados para identificación en AST DOT)
+Result interpretSwitchExpresion(AbstractExpresion*, Context*);
+Result interpretCaseExpresion(AbstractExpresion*, Context*);
+
 #endif

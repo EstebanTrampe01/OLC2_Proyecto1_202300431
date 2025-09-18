@@ -42,7 +42,15 @@ static Result restaDoubleChar(ExpresionLenguaje* self){ double* r=malloc(sizeof(
 
 
 // CHAR wrappers (similar a suma) ---------------------
-static Result restaCharChar(ExpresionLenguaje* self){ int* r = malloc(sizeof(int)); *r = (int)(*((char*)self->izquierda.valor)) - (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(r, INT);} 
+static Result restaCharChar(ExpresionLenguaje* self){
+    /* Se elimina validación de rango; resultado se trunca al rango del char subyacente. */
+    int left  = (int)(*((unsigned char*)self->izquierda.valor));
+    int right = (int)(*((unsigned char*)self->derecha.valor));
+    int diff = left - right;
+    char* r = malloc(sizeof(char));
+    *r = (char)diff;
+    return nuevoValorResultado(r, CHAR);
+} 
 static Result restaCharInt(ExpresionLenguaje* self){ int* r = malloc(sizeof(int)); *r = (int)(*((char*)self->izquierda.valor)) - *((int*)self->derecha.valor); return nuevoValorResultado(r, INT);} 
 static Result restaIntChar(ExpresionLenguaje* self){ int* r = malloc(sizeof(int)); *r = *((int*)self->izquierda.valor) - (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(r, INT);} 
 static Result restaCharFloat(ExpresionLenguaje* self){ float* r = malloc(sizeof(float)); *r = (float)(*((char*)self->izquierda.valor)) - *((float*)self->derecha.valor); return nuevoValorResultado(r, FLOAT);} 

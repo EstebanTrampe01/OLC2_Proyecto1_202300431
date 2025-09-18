@@ -7,8 +7,11 @@
 
 typedef struct {
     AbstractExpresion base;
+    int newline; /* 1 = println (agrega salto al final), 0 = print (sin salto) */
 } PrintExpresion;
 
 Result interpretPrintExpresion(AbstractExpresion*, Context*);
+/* Builder actualizado: recibe lista expresiones y flag newline */
+AbstractExpresion* nuevoPrintExpresion(AbstractExpresion* listaExpresiones, int newline);
 
 #endif

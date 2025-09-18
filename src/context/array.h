@@ -12,6 +12,6 @@ typedef struct {
 
 ArrayValue* nuevoArrayValue(TipoDato elementType, int length);
 void liberarArrayValue(ArrayValue* arr); // (no usado aún)
-void* valorPorDefecto(TipoDato tipo);
+/* Eliminado wrapper legacy valorPorDefecto: usar valor_por_defecto (default_values.h). */
 
 #endif

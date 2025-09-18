@@ -9,7 +9,7 @@
 */
 
 AbstractExpresion* nuevoInstruccionesExpresion(void);
-AbstractExpresion* nuevoPrintExpresion(AbstractExpresion* listaExpresiones);
+AbstractExpresion* nuevoPrintExpresion(AbstractExpresion* listaExpresiones, int newline);
 AbstractExpresion* nuevoPrimitivoExpresion(char* valor, TipoDato tipo);
 AbstractExpresion* nuevoListaExpresiones(void);
 AbstractExpresion* nuevoDeclaracionVariables(TipoDato, char* nombre, AbstractExpresion* expresion, int isFinal);

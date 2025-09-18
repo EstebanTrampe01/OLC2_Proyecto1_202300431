@@ -3,11 +3,14 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "context/error_reporting.h"
 
 extern void yyerror(const char *s);
 
 /* Contador de columna */
 int yycolumn = 1;
+/* De-dup para errores léxicos por línea */
+static int last_illegal_line = -1;
 
 /* Se ejecuta antes de cada accion, actualiza yylloc y columna */
 #define YY_USER_ACTION                                   \
@@ -56,7 +59,7 @@ char_literal      '([^'\\]|\\.)+'
 "/*"                 BEGIN(COMMENT2);
 <COMMENT2>[^/*\n\r]+
 <COMMENT2>[\n\r]     {yycolumn=1;}
-<COMMENT2><<EOF>>    { yyerror("EOF in comment"); return 0; }
+<COMMENT2><<EOF>>    { report_lexical_error("EOF en comentario"); return 0; }
 <COMMENT2>"*/"       BEGIN(INITIAL);
 <COMMENT2>[/*]
 
@@ -88,13 +91,14 @@ char_literal      '([^'\\]|\\.)+'
 "indexOf"           return(TOKEN_INDEXOF);
 "int"               return(TOKEN_DINT);
 "float"             return(TOKEN_DFLOAT);
-"byte"              { yyerror("Tipo byte no soportado"); }
-"short"             { yyerror("Tipo short no soportado"); }
-"long"              { yyerror("Tipo long no soportado"); }
+"byte"              { report_lexical_error("Tipo byte no soportado"); }
+"short"             { report_lexical_error("Tipo short no soportado"); }
+"long"              { report_lexical_error("Tipo long no soportado"); }
 "double"            return(TOKEN_DDOUBLE);
 "String"            return(TOKEN_DSTRING);
 "final"             return(TOKEN_FINAL);
 "new"               return(TOKEN_NEW);
+"null"              return(TOKEN_NULL);
 "true"              {yylval.string = strdup("true"); return(TOKEN_TRUE);}
 "false"             {yylval.string = strdup("false"); return(TOKEN_FALSE);}
 "boolean"           return(TOKEN_DBOOLEAN);
@@ -145,15 +149,27 @@ char_literal      '([^'\\]|\\.)+'
 {bad_string}         yyerror("Unterminated string");
 {char_literal}       {
                         yylval.string = malloc(yyleng);
-                        /* copiar sin comillas */
                         strncpy(yylval.string, &yytext[1], yyleng - 2);
                         yylval.string[yyleng-2]='\0';
-                        /* decodificar \uXXXX si aplica */
-                        if(strncmp(yylval.string, "\\u",2)==0 && strlen(yylval.string)==6){
-                            char hex[5]; memcpy(hex, yylval.string+2,4); hex[4]='\0';
-                            char* end=NULL; long code=strtol(hex,&end,16);
-                            if(*end=='\0' && code>=0 && code<=255){ /* limitar a 1 byte */
-                                yylval.string[0]=(char)code; yylval.string[1]='\0';
+                        /* Modo decimal: '\u' + 1-5 dígitos decimales => código 0-255. Validaciones estrictas */
+                        if(strncmp(yylval.string, "\\u",2)==0){
+                            const char* digits = yylval.string+2;
+                            int i=0; while(digits[i]>='0' && digits[i]<='9' && i<5) i++;
+                            if(i==0){
+                                report_lexical_error("Escape Unicode decimal sin dígitos");
+                            } else {
+                                /* No permitir más dígitos decimales inmediatos (p.ej. '\u123456' -> toma 12345 y reporta exceso) */
+                                if(digits[i]>='0' && digits[i]<='9'){
+                                    report_lexical_error("Escape Unicode decimal con más de 5 dígitos");
+                                }
+                                char buf[8]; memcpy(buf,digits,i); buf[i]='\0';
+                                long code = strtol(buf,NULL,10);
+                                if(code < 0 || code > 255){
+                                    report_lexical_error("Código Unicode decimal fuera de rango (0-255)");
+                                } else {
+                                    yylval.string[0] = (char)code;
+                                    yylval.string[1] = '\0';
+                                }
                             }
                         }
                         return(TOKEN_CHAR_LITERAL); }
@@ -188,6 +204,18 @@ char_literal      '([^'\\]|\\.)+'
 
 {white_space}        /* do nothing */
 [\n\r]               {yycolumn=1;}
-.                    yyerror("Illegal input");
+.                    {
+                        if(last_illegal_line != yylineno){
+                            unsigned char c = (unsigned char)yytext[0];
+                            char msg[64];
+                            if (c < 32 || c == 127) {
+                                snprintf(msg, sizeof(msg), "Carácter ilegal 0x%02X", c);
+                            } else {
+                                snprintf(msg, sizeof(msg), "Carácter ilegal '%c'", c);
+                            }
+                            report_lexical_error("%s", msg);
+                            last_illegal_line = yylineno;
+                        }
+                    }
 
 %%

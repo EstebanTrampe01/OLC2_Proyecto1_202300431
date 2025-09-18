@@ -2,69 +2,36 @@
 #include "ast/nodos/builders.h"
 #include "context/context.h"
 #include "context/result.h"
+#include "context/tipo_utils.h"
+#include "context/conversion_utils.h"
+#include "context/variable_utils.h"
 #include "asignacion.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "context/error_reporting.h"
 
 Result interpretAsignacionExpresion(AbstractExpresion* self, Context* context) {
     AsignacionExpresion* nodo = (AsignacionExpresion*) self;
     
-    // Buscar la variable en la tabla de símbolos
-    Symbol* symbol = buscarTablaSimbolos(context, nodo->nombre);
-    if (!symbol) {
-        printf("Error: Variable '%s' no declarada.\n", nodo->nombre);
-        return nuevoValorResultadoVacio();
-    }
-    
-    if (symbol->isFinal) {
-        printf("Error: No se puede reasignar la constante 'final' '%s'.\n", nodo->nombre);
-        return nuevoValorResultadoVacio();
-    }
+    // Obtener variable modficable (centralizado)
+    Symbol* symbol=NULL; if(!obtener_variable_modificable(self, context, nodo->nombre, &symbol)) return nuevoValorResultadoVacio();
     
     // Interpretar la expresión
     Result resultado = self->hijos[0]->interpret(self->hijos[0], context);
     
-    int ok=0; void* nuevo=NULL; TipoDato tvar=symbol->tipo;
-    switch(tvar){
-        case BYTE: case SHORT: case INT: case LONG: {
-            if(resultado.tipo==BYTE||resultado.tipo==SHORT||resultado.tipo==INT||resultado.tipo==LONG){ int* v=malloc(sizeof(int)); *v=*((int*)resultado.valor); nuevo=v; ok=1; }
-            else if(resultado.tipo==CHAR){ int* v=malloc(sizeof(int)); *v=(int)(*((char*)resultado.valor)); nuevo=v; ok=1; }
-            else if(resultado.tipo==FLOAT){ float f=*((float*)resultado.valor); if(f==(int)f){ int* v=malloc(sizeof(int)); *v=(int)f; nuevo=v; ok=1; } }
-            else if(resultado.tipo==DOUBLE){ double d=*((double*)resultado.valor); if(d==(long long)d){ int* v=malloc(sizeof(int)); *v=(int)d; nuevo=v; ok=1; } }
-            break; }
-        case FLOAT: {
-            if(resultado.tipo==FLOAT){ float* v=malloc(sizeof(float)); *v=*((float*)resultado.valor); nuevo=v; ok=1; }
-            else if(resultado.tipo==DOUBLE){ float* v=malloc(sizeof(float)); *v=(float)(*((double*)resultado.valor)); nuevo=v; ok=1; }
-            else if(resultado.tipo==CHAR){ float* v=malloc(sizeof(float)); *v=(float)(*((char*)resultado.valor)); nuevo=v; ok=1; }
-            else if(resultado.tipo==INT||resultado.tipo==BYTE||resultado.tipo==SHORT||resultado.tipo==LONG){ float* v=malloc(sizeof(float)); *v=(float)(*((int*)resultado.valor)); nuevo=v; ok=1; }
-            break; }
-        case DOUBLE: {
-            if(resultado.tipo==DOUBLE){ double* v=malloc(sizeof(double)); *v=*((double*)resultado.valor); nuevo=v; ok=1; }
-            else if(resultado.tipo==FLOAT){ double* v=malloc(sizeof(double)); *v=(double)(*((float*)resultado.valor)); nuevo=v; ok=1; }
-            else if(resultado.tipo==CHAR){ double* v=malloc(sizeof(double)); *v=(double)(*((char*)resultado.valor)); nuevo=v; ok=1; }
-            else if(resultado.tipo==INT||resultado.tipo==BYTE||resultado.tipo==SHORT||resultado.tipo==LONG){ double* v=malloc(sizeof(double)); *v=(double)(*((int*)resultado.valor)); nuevo=v; ok=1; }
-            break; }
-        case BOOLEAN: {
-            if(resultado.tipo==BOOLEAN){ int* v=malloc(sizeof(int)); *v=*((int*)resultado.valor)!=0; nuevo=v; ok=1; }
-            else if(resultado.tipo==INT){ int* v=malloc(sizeof(int)); *v=*((int*)resultado.valor)!=0; nuevo=v; ok=1; }
-            break; }
-        case CHAR: {
-            if(resultado.tipo==CHAR){ char* v=malloc(sizeof(char)); *v=*((char*)resultado.valor); nuevo=v; ok=1; }
-            break; }
-        case STRING: {
-            if(resultado.tipo==STRING){ nuevo=resultado.valor; ok=1; }
-            break; }
-        case ARRAY: {
-            if(resultado.tipo==ARRAY){
-                // Reemplazo directo del puntero (mutación ya pudo ocurrir en operaciones como add)
-                nuevo = resultado.valor; ok=1;
-            }
-            break; }
-        default: break;
+    int requiereValidacion=0;
+    if(!tipos_compatibles_asignacion(symbol->tipo, resultado.tipo, &requiereValidacion)){
+        report_runtime_error(self, context, "Tipos incompatibles en asignación a '%s'", nodo->nombre);
+        return nuevoValorResultadoVacio();
     }
-    if(!ok){ printf("Error tipos incorrectos en asignación para '%s'.\n", nodo->nombre); return nuevoValorResultadoVacio(); }
+
+    void* nuevo=NULL; char err[128];
+    if(!convertir_valor(symbol->tipo, resultado, 1, requiereValidacion, 0, &nuevo, err, sizeof(err))){
+        report_runtime_error(self, context, "Error de conversión en asignación a '%s': %s", nodo->nombre, err);
+        return nuevoValorResultadoVacio();
+    }
     // Evitar liberar arrays aquí: add() muta en sitio y reasignaciones podrían apuntar al mismo bloque
     if(symbol->valor && symbol->tipo!=STRING && symbol->tipo!=NULO && symbol->tipo!=ARRAY) free(symbol->valor);
     symbol->valor = nuevo; return nuevoValorResultadoVacio();

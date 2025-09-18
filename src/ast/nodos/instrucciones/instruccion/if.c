@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "../../../../context/result.h"
+#include "../../../../context/error_reporting.h"
 
 AbstractExpresion* nuevoIfExpresion(AbstractExpresion* condicion, AbstractExpresion* bloqueIf, AbstractExpresion* bloqueElse) {
     IfExpresion* expr = (IfExpresion*)malloc(sizeof(IfExpresion));
@@ -9,6 +10,10 @@ AbstractExpresion* nuevoIfExpresion(AbstractExpresion* condicion, AbstractExpres
     expr->bloqueIf = bloqueIf;
     expr->bloqueElse = bloqueElse;
     buildAbstractExpresion(&expr->base, interpretIfExpresion);
+    // Exponer hijos para exportar AST
+    if (condicion) agregarHijo((AbstractExpresion*)expr, condicion);
+    if (bloqueIf) agregarHijo((AbstractExpresion*)expr, bloqueIf);
+    if (bloqueElse) agregarHijo((AbstractExpresion*)expr, bloqueElse);
     return (AbstractExpresion*)expr;
 }
 
@@ -24,7 +29,7 @@ Result interpretIfExpresion(AbstractExpresion* self, Context* context) {
         condResult.tipo = BOOLEAN;
         condResult.valor = coerced;
     } else if (condResult.tipo != BOOLEAN) {
-        printf("Error: La condición del if debe ser booleana\n");
+        report_runtime_error(self, context, "La condición del if debe ser booleana");
         return nuevoValorResultadoVacio();
     }
 

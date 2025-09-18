@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "../../../../context/result.h"
+#include "../../../../context/error_reporting.h"
 
 Result interpretForExpresion(AbstractExpresion* self, Context* context);
 
@@ -12,6 +13,10 @@ AbstractExpresion* nuevoForExpresion(AbstractExpresion* initialization, Abstract
     expr->increment = increment;
     expr->body = body;
     buildAbstractExpresion(&expr->base, interpretForExpresion);
+    if (initialization) agregarHijo((AbstractExpresion*)expr, initialization);
+    if (condition) agregarHijo((AbstractExpresion*)expr, condition);
+    if (increment) agregarHijo((AbstractExpresion*)expr, increment);
+    if (body) agregarHijo((AbstractExpresion*)expr, body);
     return (AbstractExpresion*)expr;
 }
 
@@ -40,7 +45,7 @@ Result interpretForExpresion(AbstractExpresion* self, Context* context) {
             Result conditionResult = forExpr->condition->interpret(forExpr->condition, forContext);
             // fprintf(stderr, "[DEBUG for cond tipo=%s]\n", labelTipoDato[conditionResult.tipo]);
             if (conditionResult.tipo != BOOLEAN) {
-                printf("Error: La condición del for debe ser booleana\n");
+                report_runtime_error(self, context, "La condición del for debe ser booleana");
                 break; // abortar el for
             }
             if (!*((int*)conditionResult.valor)) break; // salir del for

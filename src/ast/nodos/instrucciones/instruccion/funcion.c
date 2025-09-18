@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "context/error_reporting.h"
 
 typedef struct FunctionRegistryNode {
     FuncionDecl* decl;
@@ -25,7 +26,7 @@ static FuncionDecl* buscarFuncion(char* nombre) {
 Result interpretFuncionDeclaracion(AbstractExpresion* self, Context* context) {
     FuncionDecl* f = (FuncionDecl*) self;
     if(buscarFuncion(f->nombre)) {
-        fprintf(stderr, "Error: función %s ya declarada.\n", f->nombre);
+        report_runtime_error(self, context, "Función '%s' ya declarada", f->nombre);
         return nuevoValorResultadoVacio();
     }
     FunctionRegistryNode* node = malloc(sizeof(FunctionRegistryNode));
@@ -64,14 +65,14 @@ Result interpretLlamadaFuncion(AbstractExpresion* self, Context* context) {
     LlamadaFuncion* call = (LlamadaFuncion*) self;
     FuncionDecl* decl = buscarFuncion(call->nombre);
     if(!decl){
-        fprintf(stderr, "Error: función %s no encontrada.\n", call->nombre);
+        report_runtime_error(self, context, "Función '%s' no encontrada", call->nombre);
         return nuevoValorResultadoVacio();
     }
     // crear contexto nuevo para ejecución
     Context* local = nuevoContext(context);
     // parámetros
     if(decl->paramCount != (int)call->args->numHijos){
-        fprintf(stderr, "Error: número de argumentos no coincide en llamada a %s.\n", decl->nombre);
+        report_runtime_error(self, context, "Número de argumentos no coincide en llamada a '%s'", decl->nombre);
         return nuevoValorResultadoVacio();
     }
     for(int i=0;i<decl->paramCount;i++){
@@ -98,7 +99,7 @@ Result interpretLlamadaFuncion(AbstractExpresion* self, Context* context) {
             // validar tipo
             if(decl->retorno == VOID){
                 if(r.valor != NULL){
-                    fprintf(stderr, "Error: función %s es void y retorna valor.\n", decl->nombre);
+                    report_runtime_error(self, context, "Función '%s' es void y retorna valor", decl->nombre);
                 }
                 return nuevoValorResultado(NULL, VOID);
             } else {
@@ -106,7 +107,7 @@ Result interpretLlamadaFuncion(AbstractExpresion* self, Context* context) {
                 return nuevoValorResultado(r.valor, decl->retorno);
             }
         } else if(r.tipo == BREAK || r.tipo == CONTINUE){
-            fprintf(stderr, "Error: break/continue fuera de loop en función %s.\n", decl->nombre);
+            report_runtime_error(self, context, "'break'/'continue' fuera de un bucle en función '%s'", decl->nombre);
             return nuevoValorResultadoVacio();
         }
     }
@@ -121,7 +122,18 @@ Result interpretLlamadaFuncion(AbstractExpresion* self, Context* context) {
         case BOOLEAN: { int* v=malloc(sizeof(int)); *v=0; return nuevoValorResultado(v, BOOLEAN);} 
         case CHAR: { char* v=malloc(sizeof(char)); *v='\0'; return nuevoValorResultado(v, CHAR);} 
         case STRING: return nuevoValorResultado(strdup(""), STRING);
-        default: fprintf(stderr, "Error: función %s sin return.\n", decl->nombre); return nuevoValorResultadoVacio();
+    default: report_runtime_error(self, context, "Función '%s' sin return", decl->nombre); return nuevoValorResultadoVacio();
+    }
+}
+
+void print_function_registry_symbols(void){
+    FunctionRegistryNode* cur=functionRegistry;
+    while(cur){
+        const char* tipo="?";
+        extern char* labelTipoDato[];
+        if(cur->decl->retorno>=0) tipo = labelTipoDato[cur->decl->retorno];
+        printf("SYM|%s|Funcion|%s|Global|%d|%d\n", cur->decl->nombre, tipo, cur->decl->linea, cur->decl->columna);
+        cur = cur->next;
     }
 }
 
@@ -134,6 +146,7 @@ AbstractExpresion* nuevoFuncionDeclaracion(TipoDato retorno, char* nombre, char*
     f->paramTipos = paramTipos;
     f->paramCount = paramCount;
     f->cuerpo = cuerpo; // bloque (lista de instrucciones dentro)
+    f->linea = 0; f->columna = 0;
     return (AbstractExpresion*) f;
 }
 

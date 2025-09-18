@@ -14,6 +14,7 @@
     collector la elimine por ser variable local
 */
 Result interpretPrimitivoExpresion(AbstractExpresion* self, Context* context) {
+    (void)context; /* no se usa en primitivo */
     PrimitivoExpresion* nodo = (PrimitivoExpresion*) self;
     // Debug temporal
     // fprintf(stderr, "[DEBUG primitivo] tipo=%d valor=%s\n", nodo->tipo, nodo->valor?nodo->valor:"NULL");
@@ -31,7 +32,12 @@ Result interpretPrimitivoExpresion(AbstractExpresion* self, Context* context) {
             double* vd = malloc(sizeof(double)); *vd = strtod(nodo->valor, NULL); return nuevoValorResultado(vd, DOUBLE);
         }
         case STRING:
-            return nuevoValorResultado((void*) nodo->valor, nodo->tipo);
+        {
+            if(!nodo->valor){ return nuevoValorResultado(NULL, NULO); }
+            char* dup = strdup(nodo->valor); /* asegurar heap para liberación segura */
+            if(!dup) return nuevoValorResultadoVacio();
+            return nuevoValorResultado((void*) dup, nodo->tipo);
+        }
         case BOOLEAN:
             int* valorbool = malloc(sizeof(int));
             if (strcmp(nodo->valor, "true") == 0) {
@@ -50,6 +56,10 @@ Result interpretPrimitivoExpresion(AbstractExpresion* self, Context* context) {
                 char hex[5]; memcpy(hex, nodo->valor+2,4); hex[4]='\0'; long code=strtol(hex,NULL,16); if(code>=0 && code<=255) *valorchar=(char)code; else *valorchar='?';
             } else { *valorchar = nodo->valor[0]; }
             return nuevoValorResultado((void*) valorchar, CHAR);
+        }
+        case NULO: {
+            /* Literal null */
+            return nuevoValorResultado(NULL, NULO);
         }
         default:
             printf("Tipo de dato primitivo no implementado\n");

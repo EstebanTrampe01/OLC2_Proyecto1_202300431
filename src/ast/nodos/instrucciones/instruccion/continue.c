@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "../../../../context/result.h"
+#include "../../../../context/error_reporting.h"
 
 Result interpretContinueExpresion(AbstractExpresion* self, Context* context);
 
@@ -13,7 +14,7 @@ AbstractExpresion* nuevoContinueExpresion(void) {
 
 Result interpretContinueExpresion(AbstractExpresion* self, Context* context) {
     if (!context || context->dentroLoop <= 0) {
-        printf("Error: 'continue' fuera de un bucle.\n");
+        report_runtime_error(self, context, "'continue' fuera de un bucle");
         return nuevoValorResultadoVacio();
     }
     Result result = nuevoValorResultadoVacio();

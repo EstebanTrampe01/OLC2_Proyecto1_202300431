@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include "context/error_reporting.h"
 
 Result interpretIdentificadorExpresion(AbstractExpresion* self, Context* context) {
     IdentificadorExpresion* nodo = (IdentificadorExpresion*) self;
@@ -13,7 +14,7 @@ Result interpretIdentificadorExpresion(AbstractExpresion* self, Context* context
     if (valorEncontrado) {
         return nuevoValorResultado(valorEncontrado->valor, valorEncontrado->tipo);
     }
-    printf("El identificador no existe %s\n", nodo->nombre);
+    report_runtime_error(self, context, "Identificador '%s' no declarado", nodo->nombre);
     return nuevoValorResultadoVacio();
 }
 

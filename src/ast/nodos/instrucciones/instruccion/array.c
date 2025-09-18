@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "context/error_reporting.h"
+#include "context/conversion_utils.h"
+#include "context/default_values.h"
 
 // Declaración: tipo[] nombre = new tipo[exprLength]
 typedef struct { AbstractExpresion base; TipoDato elemTipo; char* nombre; AbstractExpresion* lengthExpr; } ArrayDecl;
@@ -18,18 +21,30 @@ typedef struct { AbstractExpresion base; char* nombre; AbstractExpresion* indice
 // Acceso linealizado: dado array (que puede ser multi-d) y un índice lineal, devolver el n-ésimo elemento hoja
 typedef struct { AbstractExpresion base; AbstractExpresion* arreglo; AbstractExpresion* linearIndex; } ArrayLinearAccess;
 
-static Result interpretArrayDecl(AbstractExpresion* self, Context* context) {
+static void resolver_pos_array(AbstractExpresion* nodo, int* l, int* c){
+    if(!nodo || *l>0) return;
+    if(nodo->linea>0){ *l=nodo->linea; *c=nodo->columna; return; }
+    for(size_t i=0;i<nodo->numHijos;i++){
+        resolver_pos_array(nodo->hijos[i], l, c);
+        if(*l>0) return;
+    }
+}
+
+Result interpretArrayDecl(AbstractExpresion* self, Context* context) {
     ArrayDecl* n = (ArrayDecl*)self;
     Result lenR = n->lengthExpr->interpret(n->lengthExpr, context);
-    if (lenR.tipo != INT) { printf("Error: tamaño de array debe ser int.\n"); return nuevoValorResultadoVacio(); }
+    if (lenR.tipo != INT) { report_runtime_error(self, context, "Tamaño de array debe ser int"); return nuevoValorResultadoVacio(); }
     int len = *((int*)lenR.valor);
-    if (len < 0) { printf("Error: tamaño negativo de array.\n"); return nuevoValorResultadoVacio(); }
+    if (len < 0) { report_runtime_error(self, context, "Tamaño negativo de array"); return nuevoValorResultadoVacio(); }
     ArrayValue* arr = nuevoArrayValue(n->elemTipo, len);
-    agregarSymbol(context, nuevoVariable(n->nombre, arr, ARRAY, 0));
+    Symbol* s = nuevoVariable(n->nombre, arr, ARRAY, 0);
+    s->linea = self->linea; s->columna = self->columna;
+    if(s->linea==0){ int l=0,c=0; resolver_pos_array(self,&l,&c); if(l>0){ s->linea=l; s->columna=c; } }
+    agregarSymbol(context, s);
     return nuevoValorResultadoVacio();
 }
 
-static Result interpretArrayLiteralDecl(AbstractExpresion* self, Context* context) {
+Result interpretArrayLiteralDecl(AbstractExpresion* self, Context* context) {
     ArrayLiteralDecl* n = (ArrayLiteralDecl*)self;
     // listaValores es un nodo listaExpresiones
     AbstractExpresion* lista = n->listaValores;
@@ -37,105 +52,48 @@ static Result interpretArrayLiteralDecl(AbstractExpresion* self, Context* contex
     ArrayValue* arr = nuevoArrayValue(n->elemTipo, len);
     for (int i=0;i<len;i++) {
         Result vr = lista->hijos[i]->interpret(lista->hijos[i], context);
-        // conversión / compatibilidad amplia
-        void* convertido = NULL;
-        int compatible = 0;
-        if (vr.tipo == n->elemTipo) {
-            compatible = 1;
-            convertido = vr.valor; // mismo puntero
-        } else {
-            switch (n->elemTipo) {
-                case INT: case BYTE: case SHORT: case LONG: {
-                    if (vr.tipo==INT||vr.tipo==BYTE||vr.tipo==SHORT||vr.tipo==LONG) { // numérico entero
-                        int* v = malloc(sizeof(int)); *v = *((int*)vr.valor); convertido = v; compatible=1; }
-                    else if (vr.tipo==FLOAT||vr.tipo==DOUBLE) {
-                        float f = *((float*)vr.valor); if (f==(int)f) {int* v=malloc(sizeof(int)); *v=(int)f; convertido=v; compatible=1;} }
-                    else if (vr.tipo==BOOLEAN && (n->elemTipo==INT)) { int* v=malloc(sizeof(int)); *v = *((int*)vr.valor); convertido=v; compatible=1; }
-                    break; }
-                case FLOAT: case DOUBLE: {
-                    if (vr.tipo==INT||vr.tipo==BYTE||vr.tipo==SHORT||vr.tipo==LONG||vr.tipo==FLOAT||vr.tipo==DOUBLE) { float* v=malloc(sizeof(float));
-                        if (vr.tipo==FLOAT||vr.tipo==DOUBLE) *v = *((float*)vr.valor); else *v = (float)(*((int*)vr.valor)); convertido=v; compatible=1; }
-                    break; }
-                case BOOLEAN: {
-                    if (vr.tipo==BOOLEAN || vr.tipo==INT) { int* v=malloc(sizeof(int)); *v = (vr.tipo==BOOLEAN)?*((int*)vr.valor):(*((int*)vr.valor)!=0); convertido=v; compatible=1; }
-                    break; }
-                case CHAR: {
-                    if (vr.tipo==CHAR) { char* v=malloc(sizeof(char)); *v=*((char*)vr.valor); convertido=v; compatible=1; }
-                    break; }
-                case STRING: {
-                    if (vr.tipo==STRING) { if (vr.valor) { char* dup = strdup((char*)vr.valor); convertido=dup; } else convertido=NULL; compatible=1; }
-                    break; }
-                default: break;
-            }
-        }
-        if (!compatible) {
-            printf("Error: tipo incompatible en literal de array (pos %d).\n", i);
-            convertido = valorPorDefecto(n->elemTipo);
-        }
-        if (vr.tipo != n->elemTipo) { // liberar original si creamos copia
-            if (vr.tipo==STRING) { /* string ownership ya movido al duplicado */ }
-            else free(vr.valor);
+    void* convertido=NULL; char err[64]; int ok = convertir_valor(n->elemTipo, vr, (n->elemTipo==STRING)?1:0, 1, 0, &convertido, err, sizeof(err));
+        if(!ok){
+            report_runtime_error(self, context, "Tipo incompatible en literal de array (pos %d)", i);
+            void* defv=NULL; TipoDato tr=n->elemTipo; if(valor_por_defecto(n->elemTipo,&defv,&tr)) convertido=defv; else convertido=NULL;
         }
         if (arr->items[i]) free(arr->items[i]);
         arr->items[i] = convertido;
     }
-    agregarSymbol(context, nuevoVariable(n->nombre, arr, ARRAY, 0));
+    Symbol* s = nuevoVariable(n->nombre, arr, ARRAY, 0);
+    s->linea = self->linea; s->columna = self->columna;
+    if(s->linea==0){ int l=0,c=0; resolver_pos_array(self,&l,&c); if(l>0){ s->linea=l; s->columna=c; } }
+    agregarSymbol(context, s);
     return nuevoValorResultadoVacio();
 }
 
-static Result interpretArrayAcceso(AbstractExpresion* self, Context* context) {
+Result interpretArrayAcceso(AbstractExpresion* self, Context* context) {
     ArrayAcceso* n = (ArrayAcceso*)self;
     Result arrR = n->arreglo->interpret(n->arreglo, context);
-    if (arrR.tipo != ARRAY) { printf("Error: intento de indexar algo que no es array.\n"); return nuevoValorResultadoVacio(); }
+    if (arrR.tipo != ARRAY) { report_runtime_error(self, context, "Intento de indexar algo que no es array"); return nuevoValorResultadoVacio(); }
     ArrayValue* arr = (ArrayValue*)arrR.valor;
     Result idxR = n->indice->interpret(n->indice, context);
-    if (idxR.tipo != INT) { printf("Error: índice debe ser int.\n"); return nuevoValorResultadoVacio(); }
+    if (idxR.tipo != INT) { report_runtime_error(self, context, "Índice debe ser int"); return nuevoValorResultadoVacio(); }
     int idx = *((int*)idxR.valor);
-    if (idx < 0 || idx >= arr->length) { printf("Error: índice fuera de rango.\n"); return nuevoValorResultadoVacio(); }
+    if (idx < 0 || idx >= arr->length) { report_runtime_error(self, context, "Índice fuera de rango"); return nuevoValorResultadoVacio(); }
     // devolver valor del elemento sin copiar
     return nuevoValorResultado(arr->items[idx], arr->elementType);
 }
 
-static Result interpretArrayAsignacionElem(AbstractExpresion* self, Context* context) {
+Result interpretArrayAsignacionElem(AbstractExpresion* self, Context* context) {
     ArrayAsignacionElem* n = (ArrayAsignacionElem*)self;
     Symbol* s = buscarTablaSimbolos(context, n->nombre);
-    if (!s || s->tipo != ARRAY) { printf("Error: '%s' no es un array.\n", n->nombre); return nuevoValorResultadoVacio(); }
+    if (!s || s->tipo != ARRAY) { report_runtime_error(self, context, "'%s' no es un array", n->nombre); return nuevoValorResultadoVacio(); }
     ArrayValue* arr = (ArrayValue*)s->valor;
     Result idxR = n->indice->interpret(n->indice, context);
-    if (idxR.tipo != INT) { printf("Error: índice debe ser int.\n"); return nuevoValorResultadoVacio(); }
+    if (idxR.tipo != INT) { report_runtime_error(self, context, "Índice debe ser int"); return nuevoValorResultadoVacio(); }
     int idx = *((int*)idxR.valor);
-    if (idx < 0 || idx >= arr->length) { printf("Error: índice fuera de rango.\n"); return nuevoValorResultadoVacio(); }
+    if (idx < 0 || idx >= arr->length) { report_runtime_error(self, context, "Índice fuera de rango"); return nuevoValorResultadoVacio(); }
     Result valR = n->valor->interpret(n->valor, context);
-    void* convertido = NULL; int compatible=0;
-    if (valR.tipo == arr->elementType) { convertido = valR.valor; compatible=1; }
-    else {
-        switch (arr->elementType) {
-            case INT: case BYTE: case SHORT: case LONG: {
-                if (valR.tipo==INT||valR.tipo==BYTE||valR.tipo==SHORT||valR.tipo==LONG) { int* v=malloc(sizeof(int)); *v=*((int*)valR.valor); convertido=v; compatible=1; }
-                else if (valR.tipo==FLOAT||valR.tipo==DOUBLE) { float f=*((float*)valR.valor); if (f==(int)f) { int* v=malloc(sizeof(int)); *v=(int)f; convertido=v; compatible=1; } }
-                else if (valR.tipo==BOOLEAN && arr->elementType==INT) { int* v=malloc(sizeof(int)); *v=*((int*)valR.valor); convertido=v; compatible=1; }
-                break; }
-            case FLOAT: case DOUBLE: {
-                if (valR.tipo==INT||valR.tipo==BYTE||valR.tipo==SHORT||valR.tipo==LONG||valR.tipo==FLOAT||valR.tipo==DOUBLE) { float* v=malloc(sizeof(float)); if (valR.tipo==FLOAT||valR.tipo==DOUBLE) *v=*((float*)valR.valor); else *v=(float)(*((int*)valR.valor)); convertido=v; compatible=1; }
-                break; }
-            case BOOLEAN: {
-                if (valR.tipo==BOOLEAN || valR.tipo==INT) { int* v=malloc(sizeof(int)); *v=(valR.tipo==BOOLEAN)?*((int*)valR.valor):(*((int*)valR.valor)!=0); convertido=v; compatible=1; }
-                break; }
-            case CHAR: {
-                if (valR.tipo==CHAR) { char* v=malloc(sizeof(char)); *v=*((char*)valR.valor); convertido=v; compatible=1; }
-                break; }
-            case STRING: {
-                if (valR.tipo==STRING) { if (valR.valor) { char* dup=strdup((char*)valR.valor); convertido=dup; } else convertido=NULL; compatible=1; }
-                break; }
-            default: break;
-        }
-    }
-    if (!compatible) { printf("Error: tipo incompatible en asignación de elemento.\n"); return nuevoValorResultadoVacio(); }
-    if (valR.tipo != arr->elementType) {
-        if (valR.tipo==STRING) { /* duplicado ya creado */ } else free(valR.valor);
-    }
+    void* convertido=NULL; char err[64]; int ok = convertir_valor(arr->elementType, valR, 1, 1, 0, &convertido, err, sizeof(err));
+    if(!ok){ report_runtime_error(self, context, "Tipo incompatible en asignación de elemento"); return nuevoValorResultadoVacio(); }
     if (arr->items[idx]) free(arr->items[idx]);
-    arr->items[idx] = convertido;
+    arr->items[idx]=convertido;
     return nuevoValorResultadoVacio();
 }
 
@@ -156,65 +114,42 @@ static int flattenFetch(ArrayValue* arr, int* targetIdx, void** out, TipoDato* o
     }
 }
 
-static Result interpretArrayLinearAccess(AbstractExpresion* self, Context* context){
-    ArrayLinearAccess* n=(ArrayLinearAccess*)self; Result arrR=n->arreglo->interpret(n->arreglo,context); if(arrR.tipo!=ARRAY||!arrR.valor){ printf("Error: acceso lineal sobre no-array.\n"); return nuevoValorResultadoVacio(); }
-    Result idxR=n->linearIndex->interpret(n->linearIndex,context); if(idxR.tipo!=INT){ printf("Error: índice lineal debe ser int.\n"); return nuevoValorResultadoVacio(); }
-    int idx = *((int*)idxR.valor); if(idx<0){ printf("Error: índice lineal negativo.\n"); return nuevoValorResultadoVacio(); }
-    ArrayValue* arr=(ArrayValue*)arrR.valor; void* out=NULL; TipoDato t=NULO; int ti=idx; if(!flattenFetch(arr,&ti,&out,&t)){ printf("Error: índice lineal fuera de rango.\n"); return nuevoValorResultadoVacio(); }
+Result interpretArrayLinearAccess(AbstractExpresion* self, Context* context){
+    ArrayLinearAccess* n=(ArrayLinearAccess*)self; Result arrR=n->arreglo->interpret(n->arreglo,context); if(arrR.tipo!=ARRAY||!arrR.valor){ report_runtime_error(self, context, "Acceso lineal sobre no-array"); return nuevoValorResultadoVacio(); }
+    Result idxR=n->linearIndex->interpret(n->linearIndex,context); if(idxR.tipo!=INT){ report_runtime_error(self, context, "Índice lineal debe ser int"); return nuevoValorResultadoVacio(); }
+    int idx = *((int*)idxR.valor); if(idx<0){ report_runtime_error(self, context, "Índice lineal negativo"); return nuevoValorResultadoVacio(); }
+    ArrayValue* arr=(ArrayValue*)arrR.valor; void* out=NULL; TipoDato t=NULO; int ti=idx; if(!flattenFetch(arr,&ti,&out,&t)){ report_runtime_error(self, context, "Índice lineal fuera de rango"); return nuevoValorResultadoVacio(); }
     return nuevoValorResultado(out,t);
 }
 
-static Result interpretMultiArrayAsignacionElem(AbstractExpresion* self, Context* context) {
+Result interpretMultiArrayAsignacionElem(AbstractExpresion* self, Context* context) {
     MultiArrayAsignacionElem* n = (MultiArrayAsignacionElem*)self;
     Symbol* s = buscarTablaSimbolos(context, n->nombre);
-    if (!s || s->tipo != ARRAY) { printf("Error: '%s' no es un array.\n", n->nombre) ; return nuevoValorResultadoVacio(); }
+    if (!s || s->tipo != ARRAY) { report_runtime_error(self, context, "'%s' no es un array", n->nombre) ; return nuevoValorResultadoVacio(); }
     ArrayValue* current = (ArrayValue*)s->valor;
     size_t dims = n->indicesLista->numHijos;
-    if (dims==0) { printf("Error: sin índices en asignación multi-d.\n"); return nuevoValorResultadoVacio(); }
-    if (dims > 6) { printf("Error: máximo 6 dimensiones soportadas (se dio %zu).\n", dims); return nuevoValorResultadoVacio(); }
+    if (dims==0) { report_runtime_error(self, context, "Sin índices en asignación multi-d"); return nuevoValorResultadoVacio(); }
+    if (dims > 6) { report_runtime_error(self, context, "Máximo 6 dimensiones soportadas (se dio %zu)", dims); return nuevoValorResultadoVacio(); }
     // Navegar hasta el penúltimo nivel
     for (size_t i=0;i<dims;i++) {
         AbstractExpresion* idxExpr = n->indicesLista->hijos[i];
         Result idxR = idxExpr->interpret(idxExpr, context);
-        if (idxR.tipo != INT) { printf("Error: índice %zu debe ser int.\n", i); return nuevoValorResultadoVacio(); }
+    if (idxR.tipo != INT) { report_runtime_error(self, context, "Índice %zu debe ser int", i); return nuevoValorResultadoVacio(); }
         int idx = *((int*)idxR.valor);
-        if (idx < 0 || idx >= current->length) { printf("Error: índice %zu fuera de rango.\n", i); return nuevoValorResultadoVacio(); }
+    if (idx < 0 || idx >= current->length) { report_runtime_error(self, context, "Índice %zu fuera de rango", i); return nuevoValorResultadoVacio(); }
         if (i == dims-1) {
             // nivel final: current debe tener elementType != ARRAY (tipo base)
             Result valR = n->valor->interpret(n->valor, context);
-            TipoDato elemTipo = current->elementType;
-            void* convertido=NULL; int compatible=0;
-            if (valR.tipo == elemTipo) { convertido=valR.valor; compatible=1; }
-            else switch (elemTipo) {
-                case INT: case BYTE: case SHORT: case LONG:
-                    if (valR.tipo==INT||valR.tipo==BYTE||valR.tipo==SHORT||valR.tipo==LONG) { int* v=malloc(sizeof(int)); *v=*((int*)valR.valor); convertido=v; compatible=1; }
-                    else if (valR.tipo==FLOAT||valR.tipo==DOUBLE) { float f=*((float*)valR.valor); if (f==(int)f){ int* v=malloc(sizeof(int)); *v=(int)f; convertido=v; compatible=1; } }
-                    else if (valR.tipo==BOOLEAN && elemTipo==INT) { int* v=malloc(sizeof(int)); *v=*((int*)valR.valor); convertido=v; compatible=1; }
-                    break;
-                case FLOAT: case DOUBLE:
-                    if (valR.tipo==INT||valR.tipo==BYTE||valR.tipo==SHORT||valR.tipo==LONG||valR.tipo==FLOAT||valR.tipo==DOUBLE) { float* v=malloc(sizeof(float)); if (valR.tipo==FLOAT||valR.tipo==DOUBLE) *v=*((float*)valR.valor); else *v=(float)(*((int*)valR.valor)); convertido=v; compatible=1; }
-                    break;
-                case BOOLEAN:
-                    if (valR.tipo==BOOLEAN || valR.tipo==INT) { int* v=malloc(sizeof(int)); *v=(valR.tipo==BOOLEAN)?*((int*)valR.valor):(*((int*)valR.valor)!=0); convertido=v; compatible=1; }
-                    break;
-                case CHAR:
-                    if (valR.tipo==CHAR) { char* v=malloc(sizeof(char)); *v=*((char*)valR.valor); convertido=v; compatible=1; }
-                    break;
-                case STRING:
-                    if (valR.tipo==STRING) { if (valR.valor) { char* dup=strdup((char*)valR.valor); convertido=dup; } else convertido=NULL; compatible=1; }
-                    break;
-                default: break;
-            }
-            if (!compatible) { printf("Error: tipo incompatible en asignación multi-d.\n"); return nuevoValorResultadoVacio(); }
-            if (valR.tipo != elemTipo) { if (valR.tipo==STRING){} else free(valR.valor); }
+            void* convertido=NULL; char err[64]; int ok = convertir_valor(current->elementType, valR, 1, 1, 0, &convertido, err, sizeof(err));
+            if(!ok){ report_runtime_error(self, context, "Tipo incompatible en asignación multi-d"); return nuevoValorResultadoVacio(); }
             if (current->items[idx]) free(current->items[idx]);
-            current->items[idx] = convertido;
+            current->items[idx]=convertido;
             return nuevoValorResultadoVacio();
         } else {
             // descender un nivel
-            if (current->elementType != ARRAY) { printf("Error: demasiados índices para array base.\n"); return nuevoValorResultadoVacio(); }
+            if (current->elementType != ARRAY) { report_runtime_error(self, context, "Demasiados índices para array base"); return nuevoValorResultadoVacio(); }
             current = (ArrayValue*)current->items[idx];
-            if (!current) { printf("Error: sub-array nulo en nivel %zu.\n", i); return nuevoValorResultadoVacio(); }
+            if (!current) { report_runtime_error(self, context, "Sub-array nulo en nivel %zu", i); return nuevoValorResultadoVacio(); }
         }
     }
     return nuevoValorResultadoVacio();
@@ -270,9 +205,9 @@ AbstractExpresion* nuevoMultiArrayAsignacionElemento(char* nombre, AbstractExpre
 /* Declaración de array a partir de una expresión que en runtime debe retornar ARRAY.
    Se interpreta evaluando la expresión y validando que sea ARRAY; si no lo es, se crea vacío. */
 typedef struct { AbstractExpresion base; TipoDato elemTipo; char* nombre; AbstractExpresion* origen; } ArrayDeclFromExpr;
-static Result interpretArrayDeclFromExpr(AbstractExpresion* self, Context* ctx){
+Result interpretArrayDeclFromExpr(AbstractExpresion* self, Context* ctx){
     ArrayDeclFromExpr* n=(ArrayDeclFromExpr*)self; Result r=n->origen->interpret(n->origen, ctx);
-    if (r.tipo!=ARRAY || !r.valor){ fprintf(stderr,"Error tipos incorrectos en asignación para '%s'.\n", n->nombre); agregarSymbol(ctx, nuevoVariable(n->nombre, NULL, NULO, 0)); return nuevoValorResultadoVacio(); }
+    if (r.tipo!=ARRAY || !r.valor){ report_semantic_error(self, ctx, "Tipos incompatibles en asignación a arreglo '%s'", n->nombre); agregarSymbol(ctx, nuevoVariable(n->nombre, NULL, NULO, 0)); return nuevoValorResultadoVacio(); }
     ArrayValue* arr=(ArrayValue*)r.valor; /* opcional: validar elemento */
     agregarSymbol(ctx, nuevoVariable(n->nombre, arr, ARRAY, 0));
     return nuevoValorResultadoVacio(); }

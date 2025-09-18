@@ -32,6 +32,21 @@ TipoDato tipoResultante(Result, Result);
 /*utilizado para devolver un Result*/
 Result nuevoValorResultado(void* valor, TipoDato tipo);
 /*Utilizado para devolver una repuesta nula */
+/* Registro simple de errores acumulados */
+typedef struct {
+    char** mensajes;
+    int count;
+    int capacity;
+} ErrorList;
+
+extern ErrorList g_error_list;
+void init_error_list();
+void add_error_msg(const char* msg);
+void clear_error_list();
+void print_error_list();
 Result nuevoValorResultadoVacio(void);
+
+/* Liberar memoria asociada a un valor según su tipo (excepto estructuras complejas no implementadas aún) */
+void liberarValor(TipoDato tipo, void* valor);
 
 #endif

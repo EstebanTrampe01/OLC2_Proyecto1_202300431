@@ -9,57 +9,84 @@
 %}
 
 /* Esto va al parser.tab.h */
-%code requires {
-    #include "ast/nodos/builders.h"
-    #include "context/result.h"
-    #include "ast/nodos/instrucciones/instruccion/continue.h"
-    #include "ast/nodos/instrucciones/instruccion/array.h"
-    #include "ast/nodos/instrucciones/instruccion/matrix.h"
-    #include "ast/nodos/instrucciones/instruccion/funcion.h"
-    #include "ast/nodos/expresiones/builtins.h"
-    typedef struct ParamList {
-        char** names;
-        TipoDato* types;
-        int count;
-    } ParamList;
-    typedef struct DeclBase {
-        TipoDato tipo;
-        char* nombre;
-        int dims; /* numero de [] */
-        int esFinal;
-    } DeclBase;
-    typedef struct MultiAccessTemp { char* nombre; AbstractExpresion* indicesLista; } MultiAccessTemp;
-    /* Variables auxiliares para declaración factorizada */
-    extern TipoDato __tmp_decl_tipo; extern char* __tmp_decl_nombre; extern int __tmp_decl_final;
-}
+%{
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#include "ast/nodos/builders.h"
+#include "ast/nodos/expresiones/expresiones.h"
+#include "ast/nodos/expresiones/listaExpresiones.h"
+#include "ast/nodos/instrucciones/instrucciones.h"
+#include "ast/nodos/instrucciones/bloque.h"
+#include "ast/nodos/instrucciones/instruccion/print.h"
+#include "ast/nodos/instrucciones/instruccion/declaracion.h"
+#include "ast/nodos/instrucciones/instruccion/array.h"
+#include "ast/nodos/instrucciones/instruccion/matrix.h"
+#include "ast/nodos/instrucciones/instruccion/funcion.h"
+#include "ast/nodos/instrucciones/instruccion/if.h"
+#include "ast/nodos/instrucciones/instruccion/while.h"
+#include "ast/nodos/instrucciones/instruccion/for.h"
+#include "ast/nodos/instrucciones/instruccion/switch.h"
+#include "ast/nodos/instrucciones/instruccion/break.h"
+#include "ast/nodos/instrucciones/instruccion/continue.h"
+#include "ast/nodos/expresiones/relacionales/relacionales.h"
+#include "ast/nodos/expresiones/logicas/logicas.h"
+#include "ast/nodos/expresiones/aritmeticas/aritmeticas.h"
+#include "ast/nodos/expresiones/cast.h"
+#include "ast/nodos/expresiones/terminales/identificadores.h"
+#include "ast/nodos/expresiones/terminales/primitivos.h"
+#include "ast/nodos/expresiones/builtins.h"
+#include "context/error_reporting.h"
 
-/* Seguimiento de ubicaciones */
-%locations
-/* Mensajes de error más detallados */
-%define parse.error verbose
-
-/* Unión de tipos semánticos */
-%glr-parser
-
-%union {
-    char* string;
-    AbstractExpresion* nodo;
-    TipoDato tipoDato;
-    int boolean;
-    char char_val;
-    struct ParamList* paramList;
-    struct DeclBase* declBase;
-    struct MultiAccessTemp* multiAccess;
-}
+%}
 
 %code {
     TipoDato __tmp_decl_tipo; char* __tmp_decl_nombre; int __tmp_decl_final; int __tmp_decl_dims; 
+}
+
+// Definición auxiliar para parámetros de funciones (visible en parser.tab.h antes de %union)
+%code requires {
+    #include "ast/AbstractExpresion.h"
+    #include "ast/nodos/expresiones/expresiones.h"
+    #define YYLTYPE_IS_DECLARED 1
+    typedef struct YYLTYPE { int first_line; int first_column; int last_line; int last_column; } YYLTYPE;
+    typedef struct ParamList { int count; char** names; TipoDato* types; } ParamList;
+}
+
+%code {
+// Helper para reportar errores semánticos tempranos (declaraciones) desde el parser.
+// Crea un nodo lista vacío, asigna posición y usa report_runtime_error con ctx NULL (scope Global).
+static AbstractExpresion* parser_error_node(YYLTYPE loc, const char* fmt, ...){
+    static int last_line=-1, last_col=-1; static char last_msg[256];
+    AbstractExpresion* n = nuevoListaExpresiones();
+    SET_POS(n, loc);
+    char msg[256];
+    va_list ap; va_start(ap, fmt); vsnprintf(msg,sizeof(msg),fmt,ap); va_end(ap);
+    // De-dup: si es el mismo mensaje en la misma ubicación, no volver a reportar
+    if(!(last_line==loc.first_line && last_col==loc.first_column && strncmp(last_msg,msg,sizeof(last_msg))==0)){
+        // Reusar API central (nodo y contexto NULL -> Global)
+    report_syntax_error("%s", msg);
+        last_line = loc.first_line; last_col = loc.first_column; strncpy(last_msg,msg,sizeof(last_msg)); last_msg[sizeof(last_msg)-1]='\0';
+    }
+    return n;
+}
+}
+
+/* Definición del %union para valores semánticos */
+%union {
+    AbstractExpresion* nodo;
+    char* string;
+    int boolean;
+    ParamList* paramList;
+    TipoDato tipoDato;
 }
 
 /* Tokens tipados */
 %token <string> TOKEN_PRINT TOKEN_DINT TOKEN_DFLOAT TOKEN_DBYTE TOKEN_DSHORT TOKEN_DLONG TOKEN_DDOUBLE
 TOKEN_DSTRING TOKEN_UNSIGNED_INTEGER TOKEN_REAL TOKEN_REAL_FLOAT TOKEN_STRING TOKEN_IDENTIFIER
 %token <string> TOKEN_TRUE TOKEN_FALSE TOKEN_DBOOLEAN TOKEN_DCHAR TOKEN_CHAR_LITERAL TOKEN_FINAL TOKEN_SYSTEM_OUT_PRINTLN TOKEN_DVOID
+%token TOKEN_NULL
 %token TOKEN_SHIFT_LEFT TOKEN_SHIFT_RIGHT
 %token TOKEN_INTEGER_CLASS TOKEN_DOUBLE_CLASS TOKEN_FLOAT_CLASS TOKEN_ARRAYS
 %token TOKEN_PARSE_INT TOKEN_PARSE_DOUBLE TOKEN_PARSE_FLOAT TOKEN_VALUE_OF TOKEN_JOIN TOKEN_LENGTH TOKEN_ADD TOKEN_INDEXOF
@@ -71,11 +98,12 @@ TOKEN_DSTRING TOKEN_UNSIGNED_INTEGER TOKEN_REAL TOKEN_REAL_FLOAT TOKEN_STRING TO
 %token TOKEN_IF TOKEN_ELSE TOKEN_SWITCH TOKEN_CASE TOKEN_DEFAULT TOKEN_BREAK TOKEN_WHILE TOKEN_FOR TOKEN_CONTINUE TOKEN_NEW TOKEN_RETURN TOKEN_PUBLIC TOKEN_STATIC
 
 /* Tipo de los no-terminales que llevan valor */
-%type <nodo> s lSentencia instruccion expr imprimir lista_Expr bloque bloque_for declaracion_var primitivo asignacion if_statement switch_statement break_statement continue_statement case_list case_item instrucciones_case instruccion_case default_case instruccion_simple while_statement for_statement asignacion_elemento filas_lista fila_matriz lista_bloques2D bloque2D funcion_declaracion return_stmt llamada_funcion argumentos_opt join_variadic_args dims_expr_list atom unary postfix indices_una indices_multi main_declaracion
+%type <nodo> s lSentencia instruccion expr imprimir lista_Expr bloque bloque_for declaracion_var primitivo asignacion if_statement switch_statement break_statement continue_statement case_list case_item instrucciones_case instruccion_case default_case instruccion_simple while_statement for_statement asignacion_elemento filas_lista fila_matriz lista_bloques2D bloque2D funcion_declaracion return_stmt llamada_funcion argumentos_opt join_variadic_args dims_expr_list atom unary postfix indices_una indices_multi main_declaracion case_labels
 %type <nodo> prefix_array_decl postfix_array_decl final_prefix_array_decl final_postfix_array_decl var_decl final_var_decl array_prefix_init_opt array_postfix_init_opt for_each_statement incremento
 /* Eliminados head_nonfinal/head_final y dims_*; nueva estrategia centrada en prefix */
 %type <boolean> prefix_dims postfix_dims
 %type <paramList> lista_parametros param_opt
+%type <boolean> param_array_brackets
 
 %type <tipoDato> tipoPrimitivo
 /* removidos dims_new_list y bracket_list_plus definitvamente */
@@ -109,6 +137,9 @@ lSentencia: lSentencia instruccion { agregarHijo($1, $2); $$ = $1;}
                         agregarHijo(b, $1);
                         $$ =  b;
                     }
+    /* Sincronizar si hay error antes de cerrar bloque: conserva lo ya acumulado */
+    | lSentencia error '}' { yyerrok; $$ = $1; }
+    | error '}' { yyerrok; $$ = nuevoInstruccionesExpresion(); }
     ;
 
 instruccion: if_statement {$$ = $1;}
@@ -127,6 +158,9 @@ instruccion: if_statement {$$ = $1;}
     | asignacion_elemento ';' {$$ = $1;}
     | postfix ';' { $$ = $1; }
     | continue_statement {$$ = $1;}
+    /* Recuperación de errores: reportar y seguir sincronizando en ';' o '}' */
+    | error ';' { $$ = parser_error_node(@1, "Se esperaba ';'"); yyerrok; }
+    | error '}' { $$ = parser_error_node(@1, "Se esperaba '}'"); yyerrok; }
     ;
 
 if_statement: TOKEN_IF '(' expr ')' bloque { $$ = nuevoIfExpresion($3, $5, NULL); }
@@ -172,22 +206,62 @@ for_statement:
 
 incremento:
         asignacion { $$ = $1; }
-    | TOKEN_IDENTIFIER TOKEN_PLUS_PLUS { AbstractExpresion* id= nuevoIdentificadorExpresion($1); AbstractExpresion* uno=nuevoPrimitivoExpresion(strdup("1"),INT); AbstractExpresion* sum=nuevoSumaExpresion(id,uno); $$=nuevoAsignacionExpresion($1,sum);} 
-    | TOKEN_IDENTIFIER TOKEN_MINUS_MINUS { AbstractExpresion* id= nuevoIdentificadorExpresion($1); AbstractExpresion* uno=nuevoPrimitivoExpresion(strdup("1"),INT); AbstractExpresion* res=nuevoRestaExpresion(id,uno); $$=nuevoAsignacionExpresion($1,res);} ;
+    | TOKEN_IDENTIFIER TOKEN_PLUS_PLUS { AbstractExpresion* id= nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* uno=nuevoPrimitivoExpresion(strdup("1"),INT); SET_POS(uno,@2); AbstractExpresion* sum=nuevoSumaExpresion(id,uno); AbstractExpresion* asg=nuevoAsignacionExpresion($1,sum); SET_POS(asg,@1); $$=asg;} 
+    | TOKEN_IDENTIFIER TOKEN_MINUS_MINUS { AbstractExpresion* id= nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* uno=nuevoPrimitivoExpresion(strdup("1"),INT); SET_POS(uno,@2); AbstractExpresion* res=nuevoRestaExpresion(id,uno); AbstractExpresion* asg=nuevoAsignacionExpresion($1,res); SET_POS(asg,@1); $$=asg;} ;
 
+/*
+   Reescritura de switch/case para soportar etiquetas apiladas (fall-through de etiquetas
+   hacia un único bloque de instrucciones), por ejemplo:
+       case 1:
+       case 2:
+       case 3:
+           instruccion; break;
+   Generamos un CaseExpresion por cada etiqueta, todos compartiendo el mismo bloque y flag break.
+*/
 case_list: case_item { 
-        AbstractExpresion* lista = nuevoListaExpresiones();
-        agregarHijo(lista, $1);
-        $$ = lista;
+        /* case_item ya retorna una lista de CaseExpresion; la usamos directamente */
+        $$ = $1;
     }
     | case_list case_item {
-        agregarHijo($1, $2);
+        /* aplanar: anexar todos los hijos de $2 a la lista existente */
+        for(size_t i=0;i<$2->numHijos;i++){ agregarHijo($1, $2->hijos[i]); }
         $$ = $1;
     }
     ;
 
-case_item: TOKEN_CASE expr ':' instrucciones_case { $$ = nuevoCaseExpresion($2, $4, 0); }
-    | TOKEN_CASE expr ':' instrucciones_case TOKEN_BREAK ';' { $$ = nuevoCaseExpresion($2, $4, 1); }
+case_labels: TOKEN_CASE expr ':' {
+        AbstractExpresion* etiquetas = nuevoListaExpresiones();
+        agregarHijo(etiquetas, $2);
+        $$ = etiquetas;
+    }
+    | case_labels TOKEN_CASE expr ':' {
+        agregarHijo($1, $3);
+        $$ = $1;
+    }
+    ;
+
+case_item: case_labels instrucciones_case {
+        /* Construir lista de CaseExpresion: uno por cada etiqueta */
+        AbstractExpresion* lista = nuevoListaExpresiones();
+        for(size_t i=0;i<$1->numHijos;i++){
+            AbstractExpresion* etiqueta = $1->hijos[i];
+            AbstractExpresion* c = nuevoCaseExpresion(etiqueta, $2, 0);
+            agregarHijo(lista, c);
+        }
+    /* Asignar propiedad única del bloque de instrucciones al primer CaseExpresion */
+    if(lista->numHijos>0){ agregarHijo(lista->hijos[0], $2); }
+        $$ = lista;
+    }
+    | case_labels instrucciones_case TOKEN_BREAK ';' {
+        AbstractExpresion* lista = nuevoListaExpresiones();
+        for(size_t i=0;i<$1->numHijos;i++){
+            AbstractExpresion* etiqueta = $1->hijos[i];
+            AbstractExpresion* c = nuevoCaseExpresion(etiqueta, $2, 1);
+            agregarHijo(lista, c);
+        }
+    if(lista->numHijos>0){ agregarHijo(lista->hijos[0], $2); }
+        $$ = lista;
+    }
     ;
 
 instrucciones_case: instruccion_case {
@@ -211,10 +285,10 @@ default_case: TOKEN_DEFAULT ':' instrucciones_case { $$ = $3; }
     | TOKEN_DEFAULT ':' instrucciones_case TOKEN_BREAK ';' { $$ = $3; }
     ;
 
-break_statement: TOKEN_BREAK ';' { $$ = nuevoBreakExpresion(); }
+break_statement: TOKEN_BREAK ';' { $$ = nuevoBreakExpresion(); SET_POS($$, @1); }
     ;
 
-continue_statement: TOKEN_CONTINUE ';' { $$ = nuevoContinueExpresion(); }
+continue_statement: TOKEN_CONTINUE ';' { $$ = nuevoContinueExpresion(); SET_POS($$, @1); }
     ;
 
 instruccion_simple: imprimir {$$ = $1; }
@@ -222,17 +296,17 @@ instruccion_simple: imprimir {$$ = $1; }
     | asignacion {$$ = $1;}
     ;
 
-asignacion: TOKEN_IDENTIFIER '=' expr { $$ = nuevoAsignacionExpresion($1, $3); }
+asignacion: TOKEN_IDENTIFIER '=' expr { $$ = nuevoAsignacionExpresion($1, $3); SET_POS($$, @1); }
     | TOKEN_IDENTIFIER TOKEN_PLUS_ASSIGN expr { $$ = nuevoAsignacionSumaExpresion($1, $3); }
     | TOKEN_IDENTIFIER TOKEN_MINUS_ASSIGN expr { $$ = nuevoAsignacionRestaExpresion($1, $3); }
     | TOKEN_IDENTIFIER TOKEN_MUL_ASSIGN expr { $$ = nuevoAsignacionMultiplicacionExpresion($1, $3); }
     | TOKEN_IDENTIFIER TOKEN_DIV_ASSIGN expr { $$ = nuevoAsignacionDivisionExpresion($1, $3); }
     | TOKEN_IDENTIFIER TOKEN_MOD_ASSIGN expr { $$ = nuevoAsignacionModuloExpresion($1, $3); }
-    | TOKEN_IDENTIFIER TOKEN_AND_ASSIGN expr { /* a &= b -> a = a & b */ AbstractExpresion* id=nuevoIdentificadorExpresion($1); AbstractExpresion* op=nuevoBitAndExpresion(id,$3); $$=nuevoAsignacionExpresion($1,op);} 
-    | TOKEN_IDENTIFIER TOKEN_OR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); AbstractExpresion* op=nuevoBitOrExpresion(id,$3); $$=nuevoAsignacionExpresion($1,op);} 
-    | TOKEN_IDENTIFIER TOKEN_XOR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); AbstractExpresion* op=nuevoBitXorExpresion(id,$3); $$=nuevoAsignacionExpresion($1,op);} 
-    | TOKEN_IDENTIFIER TOKEN_SHL_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); AbstractExpresion* op=nuevoShiftLeftExpresion(id,$3); $$=nuevoAsignacionExpresion($1,op);} 
-    | TOKEN_IDENTIFIER TOKEN_SHR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); AbstractExpresion* op=nuevoShiftRightExpresion(id,$3); $$=nuevoAsignacionExpresion($1,op);} 
+    | TOKEN_IDENTIFIER TOKEN_AND_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* op=nuevoBitAndExpresion(id,$3); AbstractExpresion* asg=nuevoAsignacionExpresion($1,op); SET_POS(asg,@1); $$=asg;} 
+    | TOKEN_IDENTIFIER TOKEN_OR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* op=nuevoBitOrExpresion(id,$3); AbstractExpresion* asg=nuevoAsignacionExpresion($1,op); SET_POS(asg,@1); $$=asg;} 
+    | TOKEN_IDENTIFIER TOKEN_XOR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* op=nuevoBitXorExpresion(id,$3); AbstractExpresion* asg=nuevoAsignacionExpresion($1,op); SET_POS(asg,@1); $$=asg;} 
+    | TOKEN_IDENTIFIER TOKEN_SHL_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* op=nuevoShiftLeftExpresion(id,$3); AbstractExpresion* asg=nuevoAsignacionExpresion($1,op); SET_POS(asg,@1); $$=asg;} 
+    | TOKEN_IDENTIFIER TOKEN_SHR_ASSIGN expr { AbstractExpresion* id=nuevoIdentificadorExpresion($1); SET_POS(id,@1); AbstractExpresion* op=nuevoShiftRightExpresion(id,$3); AbstractExpresion* asg=nuevoAsignacionExpresion($1,op); SET_POS(asg,@1); $$=asg;} 
 
 lista_Expr: lista_Expr ','  expr { agregarHijo($1, $3); $$ = $1; }
     | expr { 
@@ -242,11 +316,13 @@ lista_Expr: lista_Expr ','  expr { agregarHijo($1, $3); $$ = $1; }
             }
     ;
 
-imprimir: TOKEN_PRINT '(' lista_Expr ')' { $$ =  nuevoPrintExpresion($3); }
-    | TOKEN_SYSTEM_OUT_PRINTLN '(' lista_Expr ')' { $$ =  nuevoPrintExpresion($3); }
+imprimir: TOKEN_PRINT '(' lista_Expr ')' { $$ =  nuevoPrintExpresion($3, 0); }
+    | TOKEN_SYSTEM_OUT_PRINTLN '(' lista_Expr ')' { $$ =  nuevoPrintExpresion($3, 1); }
+    | TOKEN_SYSTEM_OUT_PRINTLN '(' ')' { $$ = nuevoPrintExpresion(nuevoListaExpresiones(), 1); }
     ;
 
 bloque: '{' lSentencia '}' { $$ = nuevoBloqueExpresion($2); }
+    | '{' error '}' { $$ = nuevoBloqueExpresion(nuevoListaExpresiones()); yyerrok; }
 
 bloque_for: '{' lSentencia '}' { $$ = nuevoBloqueExpresionConContextoPadre($2); }
 
@@ -263,45 +339,45 @@ declaracion_var:
 
 prefix_array_decl:
     tipoPrimitivo prefix_dims TOKEN_IDENTIFIER { __tmp_decl_tipo=$1; __tmp_decl_dims=$2; __tmp_decl_nombre=$3; __tmp_decl_final=0; } array_prefix_init_opt {
-        if(__tmp_decl_dims<1||__tmp_decl_dims>5){ printf("Error: dims fuera rango 1-5 (%d)\n",__tmp_decl_dims); $$=nuevoListaExpresiones(); }
-        else if(!$5){ $$=nuevoListaExpresiones(); }
+    if(__tmp_decl_dims<1||__tmp_decl_dims>5){ $$=parser_error_node(@3, "dimensiones fuera de rango 1-5 (%d)",__tmp_decl_dims); }
+    else if(!$5){ $$=parser_error_node(@3, "inicialización de arreglo inválida"); }
         else $$=$5;
     };
 
 postfix_array_decl:
     tipoPrimitivo TOKEN_IDENTIFIER postfix_dims { __tmp_decl_tipo=$1; __tmp_decl_nombre=$2; __tmp_decl_dims=$3; __tmp_decl_final=0; } array_postfix_init_opt {
-        if(__tmp_decl_dims<1||__tmp_decl_dims>5){ printf("Error: dims fuera rango 1-5 (%d)\n",__tmp_decl_dims); $$=nuevoListaExpresiones(); }
-        else if(!$5){ $$=nuevoListaExpresiones(); }
+    if(__tmp_decl_dims<1||__tmp_decl_dims>5){ $$=parser_error_node(@2, "dimensiones fuera de rango 1-5 (%d)",__tmp_decl_dims); }
+    else if(!$5){ $$=parser_error_node(@2, "inicialización de arreglo inválida"); }
         else $$=$5;
     };
 
 final_prefix_array_decl:
     TOKEN_FINAL tipoPrimitivo prefix_dims TOKEN_IDENTIFIER { __tmp_decl_tipo=$2; __tmp_decl_dims=$3; __tmp_decl_nombre=$4; __tmp_decl_final=1; } array_prefix_init_opt {
-        if(__tmp_decl_dims<1||__tmp_decl_dims>5){ printf("Error: dims fuera rango 1-5 (%d)\n",__tmp_decl_dims); $$=nuevoListaExpresiones(); }
-        else if(!$6){ printf("Error: final requiere inicialización.\n"); $$=nuevoListaExpresiones(); }
+    if(__tmp_decl_dims<1||__tmp_decl_dims>5){ $$=parser_error_node(@4, "dimensiones fuera de rango 1-5 (%d)",__tmp_decl_dims); }
+    else if(!$6){ $$=parser_error_node(@4, "variable final requiere inicialización"); }
         else $$=$6;
     };
 
 final_postfix_array_decl:
     TOKEN_FINAL tipoPrimitivo TOKEN_IDENTIFIER postfix_dims { __tmp_decl_tipo=$2; __tmp_decl_nombre=$3; __tmp_decl_dims=$4; __tmp_decl_final=1; } array_postfix_init_opt {
-        if(__tmp_decl_dims<1||__tmp_decl_dims>5){ printf("Error: dims fuera rango 1-5 (%d)\n",__tmp_decl_dims); $$=nuevoListaExpresiones(); }
-        else if(!$6){ printf("Error: final requiere inicialización.\n"); $$=nuevoListaExpresiones(); }
+    if(__tmp_decl_dims<1||__tmp_decl_dims>5){ $$=parser_error_node(@3, "dimensiones fuera de rango 1-5 (%d)",__tmp_decl_dims); }
+    else if(!$6){ $$=parser_error_node(@3, "variable final requiere inicialización"); }
         else $$=$6;
     };
 
 var_decl:
-    tipoPrimitivo TOKEN_IDENTIFIER '=' expr { $$ = nuevoDeclaracionVariables($1,$2,$4,0); }
-  | tipoPrimitivo TOKEN_IDENTIFIER { $$ = nuevoListaExpresiones(); };
+        tipoPrimitivo TOKEN_IDENTIFIER '=' expr { $$ = nuevoDeclaracionVariables($1,$2,$4,0); ((DeclaracionVariable*)$$)->linea = @2.first_line; ((DeclaracionVariable*)$$)->columna = @2.first_column; }
+    | tipoPrimitivo TOKEN_IDENTIFIER { $$ = nuevoDeclaracionVariables($1,$2,NULL,0); ((DeclaracionVariable*)$$)->linea = @2.first_line; ((DeclaracionVariable*)$$)->columna = @2.first_column; };
 
 final_var_decl:
-    TOKEN_FINAL tipoPrimitivo TOKEN_IDENTIFIER '=' expr { $$ = nuevoDeclaracionVariables($2,$3,$5,1); };
+    TOKEN_FINAL tipoPrimitivo TOKEN_IDENTIFIER '=' expr { $$ = nuevoDeclaracionVariables($2,$3,$5,1); ((DeclaracionVariable*)$$)->linea = @3.first_line; ((DeclaracionVariable*)$$)->columna = @3.first_column; };
 
 array_prefix_init_opt:
     /* empty */ { $$=NULL; }
     | '=' TOKEN_NEW tipoPrimitivo dims_expr_list {
         size_t nd=$4->numHijos;
-        if ($3 != __tmp_decl_tipo) { printf("Advertencia: tipo NEW distinto del declarado.\n"); }
-        if (nd<1||nd>5){ printf("Error: dims fuera rango NEW 1-5 (%zu)\n",nd); $$=nuevoListaExpresiones(); }
+        if ($3 != __tmp_decl_tipo) { /* warning se mantiene por ahora en stderr plano */ fprintf(stderr,"WARN|tipo NEW distinto del declarado\n"); }
+    if (nd<1||nd>5){ $$=parser_error_node(@2, "dimensiones NEW fuera de rango 1-5 (%zu)",nd); }
         else if(nd==1) $$=nuevoArrayDeclaracion(__tmp_decl_tipo,__tmp_decl_nombre, $4->hijos[0]);
         else if(nd==2) $$=nuevoMatrixDeclaracion(__tmp_decl_tipo,__tmp_decl_nombre,$4->hijos[0],$4->hijos[1]);
         else { AbstractExpresion** arr=malloc(sizeof(AbstractExpresion*)*nd); for(size_t i=0;i<nd;i++) arr[i]=$4->hijos[i]; $$=nuevoMultiArrayDeclaracion(__tmp_decl_tipo,__tmp_decl_nombre,nd,arr);} }
@@ -394,7 +470,7 @@ postfix: unary { $$ = $1; }
     | postfix '.' TOKEN_LENGTH { $$ = nuevoArrayLength($1); }
     | postfix '.' TOKEN_ADD '(' expr ')' { $$ = nuevoArrayAdd($1, $5); }
     | postfix '.' TOKEN_IDENTIFIER '(' expr ')' { if(strcmp($3,"equals")==0){ $$ = nuevoIgualdadExpresion($1,$5);} else { $$=$1; } }
-    | postfix '.' TOKEN_IDENTIFIER '(' ')' { if(strcmp($3,"equals")==0){ printf("Error: equals requiere argumento\n"); $$=$1;} else { $$=$1; } }
+    | postfix '.' TOKEN_IDENTIFIER '(' ')' { if(strcmp($3,"equals")==0){ AbstractExpresion* e=parser_error_node(@3,"método equals requiere un argumento"); $$=$1; (void)e; } else { $$=$1; } }
     | TOKEN_IDENTIFIER TOKEN_PLUS_PLUS {
         AbstractExpresion* id1 = nuevoIdentificadorExpresion($1);
         AbstractExpresion* uno1 = nuevoPrimitivoExpresion(strdup("1"), INT);
@@ -410,13 +486,16 @@ postfix: unary { $$ = $1; }
     ;
 
 unary: atom { $$ = $1; }
-    | '(' tipoPrimitivo ')' unary %prec CAST { $$ = nuevoCastExpresion($2, $4); }
+     /* Hacer que el cast tome como operando una expresión postfix completa,
+         para que (double)a[i] se interprete como cast del elemento indexado
+         y no como cast del arreglo seguido de indexación sobre double. */
+     | '(' tipoPrimitivo ')' postfix %prec CAST { $$ = nuevoCastExpresion($2, $4); }
     ;
 
 atom: primitivo { $$ = $1; }
     | '(' expr ')' { $$ = $2; }
-    | TOKEN_IDENTIFIER { $$ = nuevoIdentificadorExpresion($1); }
-    | llamada_funcion { $$ = $1; }
+    | TOKEN_IDENTIFIER { $$ = nuevoIdentificadorExpresion($1); SET_POS($$, @1); }
+    | llamada_funcion { $$ = $1; /* la llamada ya debería heredar pos de su identificador interno */ }
     | TOKEN_ARRAYS '.' TOKEN_INDEXOF '(' expr ',' expr ')' { $$ = nuevoArraysIndexOf($5, $7); }
     | TOKEN_INTEGER_CLASS '.' TOKEN_PARSE_INT '(' expr ')' { $$ = nuevoParseEntero($5); }
     | TOKEN_DOUBLE_CLASS '.' TOKEN_PARSE_DOUBLE '(' expr ')' { $$ = nuevoParseDouble($5); }
@@ -434,13 +513,14 @@ join_variadic_args: expr ',' lista_Expr {
         $$ = l;
     };
 
-primitivo: TOKEN_UNSIGNED_INTEGER { $$ =  nuevoPrimitivoExpresion($1, INT); }
-    | TOKEN_STRING { $$ =  nuevoPrimitivoExpresion($1, STRING); }
-    | TOKEN_REAL_FLOAT { $$ =  nuevoPrimitivoExpresion($1, FLOAT); }
-    | TOKEN_REAL { $$ =  nuevoPrimitivoExpresion($1, DOUBLE); }
-    | TOKEN_CHAR_LITERAL { $$ =  nuevoPrimitivoExpresion($1, CHAR); }
-    | TOKEN_TRUE { $$ =  nuevoPrimitivoExpresion($1, BOOLEAN); }
-    | TOKEN_FALSE { $$ =  nuevoPrimitivoExpresion($1, BOOLEAN); }
+primitivo: TOKEN_UNSIGNED_INTEGER { $$ = nuevoPrimitivoExpresion($1, INT); SET_POS($$, @1); }
+    | TOKEN_STRING { $$ =  nuevoPrimitivoExpresion($1, STRING); SET_POS($$, @1); }
+    | TOKEN_REAL_FLOAT { $$ =  nuevoPrimitivoExpresion($1, FLOAT); SET_POS($$, @1); }
+    | TOKEN_REAL { $$ =  nuevoPrimitivoExpresion($1, DOUBLE); SET_POS($$, @1); }
+    | TOKEN_CHAR_LITERAL { $$ =  nuevoPrimitivoExpresion($1, CHAR); SET_POS($$, @1); }
+    | TOKEN_TRUE { $$ =  nuevoPrimitivoExpresion($1, BOOLEAN); SET_POS($$, @1); }
+    | TOKEN_FALSE { $$ =  nuevoPrimitivoExpresion($1, BOOLEAN); SET_POS($$, @1); }
+    | TOKEN_NULL { $$ = nuevoPrimitivoExpresion(NULL, NULO); SET_POS($$, @1); }
     ;
 
 tipoPrimitivo: TOKEN_DINT { $$ = INT; }
@@ -455,6 +535,7 @@ tipoPrimitivo: TOKEN_DINT { $$ = INT; }
 funcion_declaracion: tipoPrimitivo TOKEN_IDENTIFIER '(' param_opt ')' bloque { 
         if($4){ $$ = nuevoFuncionDeclaracion($1, $2, $4->names, $4->types, $4->count, $6); }
         else { $$ = nuevoFuncionDeclaracion($1, $2, NULL, NULL, 0, $6); }
+        ((FuncionDecl*)$$)->linea = @2.first_line; ((FuncionDecl*)$$)->columna = @2.first_column;
     };
 
 /* public static void main(String[] args){ ... } soporte mínimo: ignoramos params */
@@ -467,14 +548,18 @@ main_param_array_brackets: /* empty */ { /* 0 dims */ } | main_param_array_brack
 param_opt: /* empty */ { $$ = NULL; }
     | lista_parametros { $$ = $1; };
 
-lista_parametros: tipoPrimitivo TOKEN_IDENTIFIER { 
+/* Permitir parámetros arreglo: tipoPrimitivo '[]'... identificador -> tipo ARRAY */
+param_array_brackets: /* empty */ { $$ = 0; }
+    | param_array_brackets '[' ']' { $$ = $1 + 1; };
+
+lista_parametros: tipoPrimitivo param_array_brackets TOKEN_IDENTIFIER { 
         ParamList* pl = malloc(sizeof(ParamList));
         pl->count=1; pl->names=malloc(sizeof(char*)); pl->types=malloc(sizeof(TipoDato));
-        pl->names[0]=$2; pl->types[0]=$1; $$=pl; }
-    | lista_parametros ',' tipoPrimitivo TOKEN_IDENTIFIER { 
+        pl->names[0]=$3; pl->types[0]= ($2>0 ? ARRAY : $1); $$=pl; }
+    | lista_parametros ',' tipoPrimitivo param_array_brackets TOKEN_IDENTIFIER { 
         $1->names = realloc($1->names, sizeof(char*)*($1->count+1));
         $1->types = realloc($1->types, sizeof(TipoDato)*($1->count+1));
-        $1->names[$1->count]=$4; $1->types[$1->count]=$3; $1->count++; $$=$1; };
+        $1->names[$1->count]=$5; $1->types[$1->count]= ($4>0 ? ARRAY : $3); $1->count++; $$=$1; };
 
 return_stmt: TOKEN_RETURN { $$ = nuevoReturnExpresion(NULL); }
     | TOKEN_RETURN expr { $$ = nuevoReturnExpresion($2); }
@@ -491,9 +576,12 @@ for_each_statement:
           char bufIdx[64]; snprintf(bufIdx,sizeof(bufIdx),"__idx_fe_%s", $4); char* idxName=strdup(bufIdx);
           AbstractExpresion* cero = nuevoPrimitivoExpresion(strdup("0"), INT);
           AbstractExpresion* declIdx = nuevoDeclaracionVariables(INT, idxName, cero, 0);
+          /* Propagar ubicación al índice sintético (usamos la posición del identificador de la variable foreach) */
+          ((DeclaracionVariable*)declIdx)->linea = @4.first_line; ((DeclaracionVariable*)declIdx)->columna = @4.first_column;
           AbstractExpresion* idIdx1 = nuevoIdentificadorExpresion(idxName);
           AbstractExpresion* arrId1 = nuevoIdentificadorExpresion($6);
-          AbstractExpresion* lenAcc = nuevoArrayLength(arrId1);
+          /* Usar longitud total (flatten) para iteración sobre arreglos potencialmente multidimensionales */
+          AbstractExpresion* lenAcc = nuevoArrayTotalLength(arrId1);
           AbstractExpresion* cond = nuevoMenorQueExpresion(idIdx1, lenAcc);
           AbstractExpresion* idIdx2 = nuevoIdentificadorExpresion(idxName);
           AbstractExpresion* uno = nuevoPrimitivoExpresion(strdup("1"), INT);
@@ -504,9 +592,33 @@ for_each_statement:
     /* Acceso linealizado: soporta multi-d devolviendo elemento hoja en orden */
     AbstractExpresion* acceso = nuevoArrayLinearAccess(arrId2, idIdx3);
           AbstractExpresion* declVar = nuevoDeclaracionVariables($3, $4, acceso, 0);
+          ((DeclaracionVariable*)declVar)->linea = @4.first_line; ((DeclaracionVariable*)declVar)->columna = @4.first_column;
           AbstractExpresion* lista = nuevoListaExpresiones(); agregarHijo(lista, declVar); agregarHijo(lista, $8);
           AbstractExpresion* cuerpo = nuevoBloqueExpresion(lista);
           $$ = nuevoForExpresion(declIdx, cond, inc, cuerpo);
+    }
+    | TOKEN_FOR '(' tipoPrimitivo '[' ']' TOKEN_IDENTIFIER ':' TOKEN_IDENTIFIER ')' bloque {
+        /* for-each de arrays: itera sobre primer nivel y declara variable de tipo arreglo */
+        char bufIdx[64]; snprintf(bufIdx,sizeof(bufIdx),"__idx_fe_%s", $6); char* idxName=strdup(bufIdx);
+        AbstractExpresion* cero = nuevoPrimitivoExpresion(strdup("0"), INT);
+        AbstractExpresion* declIdx = nuevoDeclaracionVariables(INT, idxName, cero, 0);
+        ((DeclaracionVariable*)declIdx)->linea = @6.first_line; ((DeclaracionVariable*)declIdx)->columna = @6.first_column;
+        AbstractExpresion* idIdx1 = nuevoIdentificadorExpresion(idxName);
+        AbstractExpresion* arrId1 = nuevoIdentificadorExpresion($8);
+        AbstractExpresion* lenTop = nuevoArrayTopLength(arrId1);
+        AbstractExpresion* cond = nuevoMenorQueExpresion(idIdx1, lenTop);
+        AbstractExpresion* idIdx2 = nuevoIdentificadorExpresion(idxName);
+        AbstractExpresion* uno = nuevoPrimitivoExpresion(strdup("1"), INT);
+        AbstractExpresion* sum = nuevoSumaExpresion(idIdx2, uno);
+        AbstractExpresion* inc = nuevoAsignacionExpresion(idxName, sum);
+        AbstractExpresion* arrId2 = nuevoIdentificadorExpresion($8);
+        AbstractExpresion* idIdx3 = nuevoIdentificadorExpresion(idxName);
+        AbstractExpresion* acceso = nuevoArrayAcceso(arrId2, idIdx3);
+        AbstractExpresion* declVar = nuevoDeclaracionVariables(ARRAY, $6, acceso, 0);
+        ((DeclaracionVariable*)declVar)->linea = @6.first_line; ((DeclaracionVariable*)declVar)->columna = @6.first_column;
+        AbstractExpresion* lista = nuevoListaExpresiones(); agregarHijo(lista, declVar); agregarHijo(lista, $10);
+        AbstractExpresion* cuerpo = nuevoBloqueExpresion(lista);
+        $$ = nuevoForExpresion(declIdx, cond, inc, cuerpo);
     };
 
 argumentos_opt: /* empty */ { $$ = nuevoListaExpresiones(); }
@@ -517,9 +629,16 @@ llamada_funcion: TOKEN_IDENTIFIER '(' argumentos_opt ')' { $$ = nuevoLlamadaFunc
 
 /* definición de yyerror, usa el yylloc global para ubicación */
 void yyerror(const char *s) {
-    fprintf(stderr,
-            "Illegal input %s en %d:%d\n",
-            s,
-            yylloc.first_line,
-            yylloc.first_column);
+    // Traducir mensajes comunes de Bison al español de forma ligera
+    const char* msg = s;
+    if (strcmp(s, "syntax error") == 0) msg = "Error de sintaxis";
+    else if (strstr(s, "unexpected") && strstr(s, "expecting")) msg = s; // dejar tal cual si es detallado
+    /* Deduplicación básica: mismo mensaje en la misma posición */
+    static int last_line = -1, last_col = -1; static char last_msg[128] = "";
+    if (last_line == yylloc.first_line && last_col == yylloc.first_column && strcmp(last_msg, msg) == 0) {
+        return;
+    }
+    last_line = yylloc.first_line; last_col = yylloc.first_column; strncpy(last_msg, msg, sizeof(last_msg)-1); last_msg[sizeof(last_msg)-1]='\0';
+    report_syntax_error("%s", msg);
+    /* En modo GLR, la recuperación estándar es limitada; evitamos macros no disponibles aquí. */
 }

@@ -44,7 +44,15 @@ static Result multiplicarDoubleChar(ExpresionLenguaje* self){ double* r=malloc(s
 
 
 // Wrappers CHAR multiplicación
-static Result multiplicarCharChar(ExpresionLenguaje* self){ int* r=malloc(sizeof(int)); *r=(int)(*((char*)self->izquierda.valor)) * (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(r, INT);} 
+static Result multiplicarCharChar(ExpresionLenguaje* self){
+    /* Sin validación de rango: comportamiento de overflow definido por truncamiento a char. */
+    int a = (int)(*((unsigned char*)self->izquierda.valor));
+    int b = (int)(*((unsigned char*)self->derecha.valor));
+    int prod = a * b;
+    char* r = malloc(sizeof(char));
+    *r = (char)prod;
+    return nuevoValorResultado(r, CHAR);
+} 
 static Result multiplicarCharInt(ExpresionLenguaje* self){ int* r=malloc(sizeof(int)); *r=(int)(*((char*)self->izquierda.valor)) * *((int*)self->derecha.valor); return nuevoValorResultado(r, INT);} 
 static Result multiplicarIntChar(ExpresionLenguaje* self){ int* r=malloc(sizeof(int)); *r= *((int*)self->izquierda.valor) * (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(r, INT);} 
 static Result multiplicarCharFloat(ExpresionLenguaje* self){ float* r=malloc(sizeof(float)); *r=(float)(*((char*)self->izquierda.valor)) * *((float*)self->derecha.valor); return nuevoValorResultado(r, FLOAT);} 
@@ -60,19 +68,19 @@ Operacion tablaOperacionesMultiplicacion[TIPO_COUNT][TIPO_COUNT] = {
     [BYTE][INT] = multiplicarIntInt,
     [BYTE][LONG] = multiplicarIntInt,
     [BYTE][FLOAT] = multiplicarIntFloat,
-    [BYTE][DOUBLE] = multiplicarIntFloat,
+    /* BYTE/SHORT/LONG con DOUBLE pasan a rama explícita [INT][DOUBLE] abajo para resultado DOUBLE */
     [SHORT][BYTE] = multiplicarIntInt,
     [SHORT][SHORT] = multiplicarIntInt,
     [SHORT][INT] = multiplicarIntInt,
     [SHORT][LONG] = multiplicarIntInt,
     [SHORT][FLOAT] = multiplicarIntFloat,
-    [SHORT][DOUBLE] = multiplicarIntFloat,
+    /* handled by [INT][DOUBLE] mapping below */
     [LONG][BYTE] = multiplicarIntInt,
     [LONG][SHORT] = multiplicarIntInt,
     [LONG][INT] = multiplicarIntInt,
     [LONG][LONG] = multiplicarIntInt,
     [LONG][FLOAT] = multiplicarIntFloat,
-    [LONG][DOUBLE] = multiplicarIntFloat,
+    /* handled by [INT][DOUBLE] mapping below */
     [DOUBLE][BYTE] = multiplicarDoubleInt,
     [DOUBLE][SHORT] = multiplicarDoubleInt,
     [DOUBLE][INT] = multiplicarDoubleInt,

@@ -41,6 +41,9 @@ AbstractExpresion* nuevoSwitchExpresion(AbstractExpresion* expresion, AbstractEx
     expr->casos = casos;
     expr->casoDefault = casoDefault;
     buildAbstractExpresion(&expr->base, interpretSwitchExpresion);
+    if (expresion) agregarHijo((AbstractExpresion*)expr, expresion);
+    if (casos) agregarHijo((AbstractExpresion*)expr, casos);
+    if (casoDefault) agregarHijo((AbstractExpresion*)expr, casoDefault);
     return (AbstractExpresion*)expr;
 }
 
@@ -49,6 +52,7 @@ Result interpretSwitchExpresion(AbstractExpresion* self, Context* context) {
 
     // Evaluar la expresión del switch
     Result switchResult = expr->expresion->interpret(expr->expresion, context);
+    context->dentroSwitch++;
     
     // Evaluar cada caso
     if (expr->casos != NULL) {
@@ -64,6 +68,7 @@ Result interpretSwitchExpresion(AbstractExpresion* self, Context* context) {
                 
                 // Si tiene break, terminar
                 if (caso->tieneBreak) {
+                    context->dentroSwitch--;
                     return result;
                 }
                 // Si no tiene break, continuar con el siguiente caso
@@ -73,9 +78,12 @@ Result interpretSwitchExpresion(AbstractExpresion* self, Context* context) {
     
     // Si no encontró ningún caso coincidente, ejecutar default si existe
     if (expr->casoDefault != NULL) {
-        return expr->casoDefault->interpret(expr->casoDefault, context);
+        Result r = expr->casoDefault->interpret(expr->casoDefault, context);
+        context->dentroSwitch--;
+        return r;
     }
     
+    context->dentroSwitch--;
     return nuevoValorResultadoVacio();
 }
 
@@ -85,6 +93,13 @@ AbstractExpresion* nuevoCaseExpresion(AbstractExpresion* valor, AbstractExpresio
     expr->instrucciones = instrucciones;
     expr->tieneBreak = tieneBreak;
     buildAbstractExpresion(&expr->base, interpretCaseExpresion);
+    if (valor) agregarHijo((AbstractExpresion*)expr, valor);
+     /* Importante: NO agregamos 'instrucciones' como hijo aquí.
+         En presencia de 'case' apilados que comparten el mismo bloque de instrucciones,
+         varios CaseExpresion apuntarán al mismo nodo 'instrucciones'. Si todos lo agregaran
+         como hijo, el liberador de AST intentaría liberarlo múltiples veces.
+         El parser asignará la propiedad a exactamente UNO de los CaseExpresion creados.
+     */
     return (AbstractExpresion*)expr;
 }
 

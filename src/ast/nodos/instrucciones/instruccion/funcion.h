@@ -13,6 +13,8 @@ typedef struct {
     TipoDato* paramTipos;
     int paramCount;
     AbstractExpresion* cuerpo; // bloque
+    int linea;
+    int columna;
 } FuncionDecl;
 
 typedef struct {
@@ -33,5 +35,8 @@ AbstractExpresion* nuevoLlamadaFuncion(char* nombre, AbstractExpresion* args);
 Result interpretFuncionDeclaracion(AbstractExpresion*, Context*);
 Result interpretReturnExpresion(AbstractExpresion*, Context*);
 Result interpretLlamadaFuncion(AbstractExpresion*, Context*);
+
+/* Utilidad: imprimir funciones declaradas en formato SYM| */
+void print_function_registry_symbols(void);
 
 #endif

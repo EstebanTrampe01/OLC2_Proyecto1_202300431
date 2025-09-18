@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "../../../../context/result.h"
+#include "../../../../context/error_reporting.h"
 
 Result interpretWhileExpresion(AbstractExpresion* self, Context* context);
 
@@ -10,6 +11,8 @@ AbstractExpresion* nuevoWhileExpresion(AbstractExpresion* condition, AbstractExp
     expr->condition = condition;
     expr->body = body;
     buildAbstractExpresion(&expr->base, interpretWhileExpresion);
+        if (condition) agregarHijo((AbstractExpresion*)expr, condition);
+        if (body) agregarHijo((AbstractExpresion*)expr, body);
     return (AbstractExpresion*)expr;
 }
 
@@ -25,7 +28,7 @@ Result interpretWhileExpresion(AbstractExpresion* self, Context* context) {
                 // debug tipo condición
                 // fprintf(stderr, "[DEBUG while cond tipo=%s]\n", labelTipoDato[conditionResult.tipo]);
                 if (conditionResult.tipo != BOOLEAN) {
-                        printf("Error: La condición del while debe ser booleana\n");
+                        report_runtime_error(self, context, "La condición del while debe ser booleana");
                         break; // abortar bucle
                 }
                 int continuar = *((int*)conditionResult.valor);

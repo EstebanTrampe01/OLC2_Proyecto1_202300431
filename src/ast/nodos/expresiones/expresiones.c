@@ -5,6 +5,7 @@
 #include "expresiones.h"
 #include "ast/nodos/expresiones/aritmeticas/aritmeticas.h"
 #include "ast/nodos/expresiones/logicas/logicas.h"
+#include "ast/nodos/expresiones/relacionales/relacionales.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -33,6 +34,21 @@ Result interpretExpresionLenguaje(AbstractExpresion* self, Context* context) {
             int* coerced = malloc(sizeof(int)); *coerced = (*((int*)derecha.valor)!=0); derecha.tipo=BOOLEAN; derecha.valor=coerced;
         }
     }
+    // Soporte especial: comparaciones con null para igualdad/desigualdad
+    if (nodo->tablaOperaciones==&tablaOperacionesIgualdad || nodo->tablaOperaciones==&tablaOperacionesDesigualdad) {
+        int leftIsNull = (izquierda.tipo==NULO) || ((izquierda.tipo==STRING || izquierda.tipo==ARRAY) && izquierda.valor==NULL);
+        int rightIsNull = (derecha.tipo==NULO) || ((derecha.tipo==STRING || derecha.tipo==ARRAY) && derecha.valor==NULL);
+        if (leftIsNull || rightIsNull) {
+            int* r = (int*)malloc(sizeof(int));
+            if (nodo->tablaOperaciones==&tablaOperacionesIgualdad) {
+                *r = (leftIsNull == rightIsNull);
+            } else {
+                *r = (leftIsNull != rightIsNull);
+            }
+            return nuevoValorResultado(r, BOOLEAN);
+        }
+    }
+
     Operacion op = (*nodo->tablaOperaciones)[izquierda.tipo][derecha.tipo];
     if (op == NULL) {
         printf("Operación no soportada para los tipos %s, %s\n", labelTipoDato[izquierda.tipo], labelTipoDato[derecha.tipo]);

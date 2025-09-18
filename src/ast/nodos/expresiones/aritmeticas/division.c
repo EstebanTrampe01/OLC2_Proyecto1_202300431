@@ -11,20 +11,10 @@
 Result dividirIntInt(ExpresionLenguaje* self) {
     int left = *((int*)self->izquierda.valor);
     int right = *((int*)self->derecha.valor);
-    float division = (float)left / right;
-    
-    // Check if the result is a whole number
-    if (division == (int)division) {
-        // Result is a whole number, return as INT
-        int* res = malloc(sizeof(int));
-        *res = (int)division;
-        return nuevoValorResultado(res, INT);
-    } else {
-        // Result is a decimal, return as FLOAT
-        float* res = malloc(sizeof(float));
-        *res = division;
-        return nuevoValorResultado(res, FLOAT);
-    }
+    if(right==0){ int* z=malloc(sizeof(int)); *z=0; return nuevoValorResultado(z, INT);} /* evitar división por cero */
+    int* res = malloc(sizeof(int));
+    *res = left / right; /* división entera */
+    return nuevoValorResultado(res, INT);
 }
 
 Result dividirFloatFloat(ExpresionLenguaje* self) {
@@ -55,7 +45,18 @@ static Result dividirDoubleChar(ExpresionLenguaje* self){ double a=*((double*)se
 
 
 // Wrappers CHAR division
-static Result dividirCharChar(ExpresionLenguaje* self){ int a=(int)(*((char*)self->izquierda.valor)); int b=(int)(*((char*)self->derecha.valor)); int* r=malloc(sizeof(int)); *r = (b==0)?0:(a / b); return nuevoValorResultado(r, INT);} 
+static Result dividirCharChar(ExpresionLenguaje* self){
+    int a = (int)(*((unsigned char*)self->izquierda.valor));
+    int b = (int)(*((unsigned char*)self->derecha.valor));
+    if(b==0){
+        add_error_msg("División char-char por cero");
+        return nuevoValorResultadoVacio();
+    }
+    int q = a / b; /* truncamiento posterior */
+    char* r = malloc(sizeof(char));
+    *r = (char)q;
+    return nuevoValorResultado(r, CHAR);
+} 
 static Result dividirCharInt(ExpresionLenguaje* self){ int a=(int)(*((char*)self->izquierda.valor)); int b=*((int*)self->derecha.valor); int* r=malloc(sizeof(int)); *r = b==0 ? 0 : a/b; return nuevoValorResultado(r, INT);} 
 static Result dividirIntChar(ExpresionLenguaje* self){ int a=*((int*)self->izquierda.valor); int b=(int)(*((char*)self->derecha.valor)); int* r=malloc(sizeof(int)); *r = b==0 ? 0 : a/b; return nuevoValorResultado(r, INT);} 
 static Result dividirCharFloat(ExpresionLenguaje* self){ float a=(float)(*((char*)self->izquierda.valor)); float b=*((float*)self->derecha.valor); float* r=malloc(sizeof(float)); *r = b==0 ? 0.0f : a/b; return nuevoValorResultado(r, FLOAT);} 
@@ -72,19 +73,19 @@ Operacion tablaOperacionesDivision[TIPO_COUNT][TIPO_COUNT] = {
     [BYTE][INT] = dividirIntInt,
     [BYTE][LONG] = dividirIntInt,
     [BYTE][FLOAT] = dividirIntFloat,
-    [BYTE][DOUBLE] = dividirIntFloat,
+    /* BYTE con DOUBLE se maneja al final con [BYTE][DOUBLE]=dividirIntDouble para DOUBLE */
     [SHORT][BYTE] = dividirIntInt,
     [SHORT][SHORT] = dividirIntInt,
     [SHORT][INT] = dividirIntInt,
     [SHORT][LONG] = dividirIntInt,
     [SHORT][FLOAT] = dividirIntFloat,
-    [SHORT][DOUBLE] = dividirIntFloat,
+    /* SHORT con DOUBLE mapeado a dividirIntDouble */
     [LONG][BYTE] = dividirIntInt,
     [LONG][SHORT] = dividirIntInt,
     [LONG][INT] = dividirIntInt,
     [LONG][LONG] = dividirIntInt,
     [LONG][FLOAT] = dividirIntFloat,
-    [LONG][DOUBLE] = dividirIntFloat,
+    /* LONG con DOUBLE mapeado a dividirIntDouble */
     [DOUBLE][BYTE] = dividirDoubleInt,
     [DOUBLE][SHORT] = dividirDoubleInt,
     [DOUBLE][INT] = dividirDoubleInt,

@@ -1,5 +1,5 @@
-#ifndef PRINT_H
-#define PRINT_H
+#ifndef DECLARACION_H
+#define DECLARACION_H
 
 #include "ast/AbstractExpresion.h"
 #include "context/context.h"
@@ -10,8 +10,11 @@ typedef struct {
     char* nombre;
     TipoDato tipo;
     int isFinal;
+    int linea;
+    int columna;
 } DeclaracionVariable;
 
 Result interpretDeclaracionVariable(AbstractExpresion*, Context*);
+
 
 #endif

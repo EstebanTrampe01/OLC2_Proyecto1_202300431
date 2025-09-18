@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 Result sumarIntInt(ExpresionLenguaje* self) {
     int* res = malloc(sizeof(int));
@@ -43,6 +44,8 @@ static Result sumarDoubleDouble(ExpresionLenguaje* self){ double* r=malloc(sizeo
 Result sumarStringString(ExpresionLenguaje* self) {
     char* left = (char*)self->izquierda.valor;
     char* right = (char*)self->derecha.valor;
+    if(!left) { left = "null"; }
+    if(!right) { right = "null"; }
     size_t len = strlen(left) + strlen(right) + 1;
     char* res = malloc(len);
     strcpy(res, left);
@@ -55,6 +58,7 @@ Result sumarStringInt(ExpresionLenguaje* self) {
     int right = *(int*)self->derecha.valor;
     char buf[32];
     sprintf(buf, "%d", right);
+    if(!left) { left = "null"; }
     size_t len = strlen(left) + strlen(buf) + 1;
     char* res = malloc(len);
     strcpy(res, left);
@@ -65,8 +69,22 @@ Result sumarStringInt(ExpresionLenguaje* self) {
 Result sumarStringFloat(ExpresionLenguaje* self) {
     char* left = (char*)self->izquierda.valor;
     float right = *(float*)self->derecha.valor;
-    char buf[32];
-    sprintf(buf, "%f", right);
+    char buf[64];
+    double dv = (double)right;
+    double rd = round(dv * 10000.0) / 10000.0;
+    if (rd == 0.0) { rd = 0.0; }
+    long long entero = (long long)rd;
+    if (fabs(rd - (double)entero) < 1e-12) {
+        snprintf(buf, sizeof(buf), "%lld.0", entero);
+    } else {
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), "%.4f", rd);
+        size_t l = strlen(tmp);
+        while (l > 0 && tmp[l-1] == '0') { tmp[--l] = '\0'; }
+        if (l > 0 && tmp[l-1] == '.') { tmp[--l] = '\0'; }
+        snprintf(buf, sizeof(buf), "%s", tmp);
+    }
+    if(!left) { left = "null"; }
     size_t len = strlen(left) + strlen(buf) + 1;
     char* res = malloc(len);
     strcpy(res, left);
@@ -77,7 +95,21 @@ Result sumarStringDouble(ExpresionLenguaje* self) {
     char* left = (char*)self->izquierda.valor;
     double right = *(double*)self->derecha.valor;
     char buf[64];
-    sprintf(buf, "%g", right);
+    double dv = right;
+    double rd = round(dv * 10000.0) / 10000.0;
+    if (rd == 0.0) { rd = 0.0; }
+    long long entero = (long long)rd;
+    if (fabs(rd - (double)entero) < 1e-12) {
+        snprintf(buf, sizeof(buf), "%lld.0", entero);
+    } else {
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), "%.4f", rd);
+        size_t l = strlen(tmp);
+        while (l > 0 && tmp[l-1] == '0') { tmp[--l] = '\0'; }
+        if (l > 0 && tmp[l-1] == '.') { tmp[--l] = '\0'; }
+        snprintf(buf, sizeof(buf), "%s", tmp);
+    }
+    if(!left) { left = "null"; }
     size_t len = strlen(left) + strlen(buf) + 1;
     char* res = malloc(len);
     strcpy(res, left);
@@ -110,6 +142,7 @@ Result sumarStringChar(ExpresionLenguaje* self) {
 Result sumarIntString(ExpresionLenguaje* self) {
     int left = *(int*)self->izquierda.valor;
     char* right = (char*)self->derecha.valor;
+    if(!right) { right = "null"; }
     char buf[32];
     sprintf(buf, "%d", left);
     size_t len = strlen(buf) + strlen(right) + 1;
@@ -122,8 +155,22 @@ Result sumarIntString(ExpresionLenguaje* self) {
 Result sumarFloatString(ExpresionLenguaje* self) {
     float left = *(float*)self->izquierda.valor;
     char* right = (char*)self->derecha.valor;
-    char buf[32];
-    sprintf(buf, "%f", left);
+    if(!right) { right = "null"; }
+    char buf[64];
+    double dv = (double)left;
+    double rd = round(dv * 10000.0) / 10000.0;
+    if (rd == 0.0) { rd = 0.0; }
+    long long entero = (long long)rd;
+    if (fabs(rd - (double)entero) < 1e-12) {
+        snprintf(buf, sizeof(buf), "%lld.0", entero);
+    } else {
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), "%.4f", rd);
+        size_t l = strlen(tmp);
+        while (l > 0 && tmp[l-1] == '0') { tmp[--l] = '\0'; }
+        if (l > 0 && tmp[l-1] == '.') { tmp[--l] = '\0'; }
+        snprintf(buf, sizeof(buf), "%s", tmp);
+    }
     size_t len = strlen(buf) + strlen(right) + 1;
     char* res = malloc(len);
     strcpy(res, buf);
@@ -132,9 +179,23 @@ Result sumarFloatString(ExpresionLenguaje* self) {
 }
 Result sumarDoubleString(ExpresionLenguaje* self) {
     double left = *(double*)self->izquierda.valor;
-    char* right = (char*)self->derecha.valor;
+    char* right = (char*)self->derecha.valor; 
+    if(!right) { right = "null"; }
     char buf[64];
-    sprintf(buf, "%g", left);
+    double dv = left;
+    double rd = round(dv * 10000.0) / 10000.0;
+    if (rd == 0.0) { rd = 0.0; }
+    long long entero = (long long)rd;
+    if (fabs(rd - (double)entero) < 1e-12) {
+        snprintf(buf, sizeof(buf), "%lld.0", entero);
+    } else {
+        char tmp[64];
+        snprintf(tmp, sizeof(tmp), "%.4f", rd);
+        size_t l = strlen(tmp);
+        while (l > 0 && tmp[l-1] == '0') { tmp[--l] = '\0'; }
+        if (l > 0 && tmp[l-1] == '.') { tmp[--l] = '\0'; }
+        snprintf(buf, sizeof(buf), "%s", tmp);
+    }
     size_t len = strlen(buf) + strlen(right) + 1;
     char* res = malloc(len);
     strcpy(res, buf);
@@ -163,7 +224,16 @@ Result sumarCharString(ExpresionLenguaje* self) {
     return nuevoValorResultado(res, STRING);
 }
 
-static Result sumarCharChar(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = (int)(*((char*)self->izquierda.valor)) + (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, INT);} 
+static Result sumarCharChar(ExpresionLenguaje* self){
+    /* Ahora permitimos overflow natural del tipo char (comportamiento implícito C) y valores intermedios fuera de 0-255.
+       Se conserva almacenamiento como char; impresión mostrará el código numérico bruto. */
+    int a = (int)(*((unsigned char*)self->izquierda.valor));
+    int b = (int)(*((unsigned char*)self->derecha.valor));
+    int s = a + b; /* se truncará al guardar en char */
+    char* res = malloc(sizeof(char));
+    *res = (char)s;
+    return nuevoValorResultado(res, CHAR);
+} 
 static Result sumarCharInt(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = (int)(*((char*)self->izquierda.valor)) + *((int*)self->derecha.valor); return nuevoValorResultado(res, INT);} 
 static Result sumarIntChar(ExpresionLenguaje* self){ int* res=malloc(sizeof(int)); *res = *((int*)self->izquierda.valor) + (int)(*((char*)self->derecha.valor)); return nuevoValorResultado(res, INT);} 
 static Result sumarCharFloat(ExpresionLenguaje* self){ float* res=malloc(sizeof(float)); *res = (float)(*((char*)self->izquierda.valor)) + *((float*)self->derecha.valor); return nuevoValorResultado(res, FLOAT);} 
@@ -199,19 +269,19 @@ Operacion tablaOperacionesSuma[TIPO_COUNT][TIPO_COUNT] = {
     [BYTE][INT] = sumarIntInt,
     [BYTE][LONG] = sumarIntInt,
     [BYTE][FLOAT] = sumarIntFloat,
-    [BYTE][DOUBLE] = sumarIntFloat,
+    [BYTE][DOUBLE] = sumarIntDouble,
     [SHORT][BYTE] = sumarIntInt,
     [SHORT][SHORT] = sumarIntInt,
     [SHORT][INT] = sumarIntInt,
     [SHORT][LONG] = sumarIntInt,
     [SHORT][FLOAT] = sumarIntFloat,
-    [SHORT][DOUBLE] = sumarIntFloat,
+    [SHORT][DOUBLE] = sumarIntDouble,
     [LONG][BYTE] = sumarIntInt,
     [LONG][SHORT] = sumarIntInt,
     [LONG][INT] = sumarIntInt,
     [LONG][LONG] = sumarIntInt,
     [LONG][FLOAT] = sumarIntFloat,
-    [LONG][DOUBLE] = sumarIntFloat,
+    [LONG][DOUBLE] = sumarIntDouble,
     [DOUBLE][BYTE] = sumarDoubleInt,
     [DOUBLE][SHORT] = sumarDoubleInt,
     [DOUBLE][INT] = sumarDoubleInt,
@@ -228,9 +298,6 @@ Operacion tablaOperacionesSuma[TIPO_COUNT][TIPO_COUNT] = {
     [FLOAT][DOUBLE] = sumarFloatDouble,
     [DOUBLE][STRING] = sumarDoubleString,
     // (ya cubierto arriba) [DOUBLE][LONG] duplicado eliminado
-    [BYTE][DOUBLE] = sumarIntDouble,
-    [SHORT][DOUBLE] = sumarIntDouble,
-    [LONG][DOUBLE] = sumarIntDouble,
     [STRING][BYTE] = sumarStringInt,
     [STRING][SHORT] = sumarStringInt,
     [STRING][LONG] = sumarStringInt,

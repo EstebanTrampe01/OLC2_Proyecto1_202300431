@@ -36,50 +36,35 @@ Result interpretPrintExpresion(AbstractExpresion* self, Context* context) {
     // recorremos  cada expresion y lo que nos devuelva imprimimos el valor
     AbstractExpresion* listaExpresiones = self->hijos[0];
     if (!listaExpresiones) return nuevoValorResultadoVacio();
+    PrintExpresion* pe = (PrintExpresion*)self;
+    // Limpieza: se eliminaron hacks de transformación contextual
     for (size_t i = 0; i < listaExpresiones->numHijos; ++i) {
         if (!listaExpresiones->hijos[i]) continue;
         Result result = listaExpresiones->hijos[i]->interpret(listaExpresiones->hijos[i], context);
-    switch (result.tipo) {
-            case STRING:
-                printf("%s\n", (char*) result.valor);
-                break;
-            case INT:
-                printf("%d\n", *(int*)result.valor);
-                break;
-            case ARRAY: {
-                ArrayValue* arr = (ArrayValue*)result.valor;
-                printArrayRec(arr);
-                printf("\n");
-                break; }
-            case FLOAT:
-                printf("%g\n", *(float*)result.valor);
-                break;
-            case DOUBLE:
-                printf("%.*g\n", 15, *(double*)result.valor);
-                break;
-            case BOOLEAN:
-                printf("%s\n", *(int*)result.valor ? "true" : "false");
-                break;
-            case CHAR:
-                printf("%c\n", *(char*)result.valor);
-                break;
-            case NULO:
-                printf("NULL\n");
-                break;
-            default:
-                printf("Tipo no implementado (%d)\n", result.tipo);
+        int last = (i == listaExpresiones->numHijos - 1);
+        switch (result.tipo) {
+            case STRING: { const char* s=(const char*)result.valor; printf("%s", s? s: "null"); break; }
+            case INT:      printf("%d", *(int*)result.valor); break;
+            case ARRAY: {  ArrayValue* arr = (ArrayValue*)result.valor; printArrayRec(arr); break; }
+            case FLOAT:    printf("%g", *(float*)result.valor); break;
+            case DOUBLE: { double dv=*(double*)result.valor; if((long)dv==dv) printf("%ld.0", (long)dv); else printf("%.*g", 15, dv); break; }
+            case BOOLEAN:  printf("%s", *(int*)result.valor ? "true" : "false"); break;
+            case CHAR: /* Mostrar código unicode numérico crudo */ printf("%d", (int)(*(unsigned char*)result.valor)); break;
+            case NULO:     printf("NULL"); break;
+            default:       printf("<tipo %d>", result.tipo); break;
         }
+    // evitamos segunda impresión de cadenas (antes duplicaba)
+        /* Separador entre expresiones: espacio como Java cuando concatenas: aquí conservamos sin espacio; el usuario controla via String.valueOf en su código */
     }
+    if (pe->newline) printf("\n");
     return nuevoValorResultadoVacio();
 }
 
-AbstractExpresion* nuevoPrintExpresion(AbstractExpresion* listaExpresiones) {
-    //reservar el espacio en memoria y obtener el puntero a este
+AbstractExpresion* nuevoPrintExpresion(AbstractExpresion* listaExpresiones, int newline) {
     PrintExpresion* nodo = malloc(sizeof(PrintExpresion));
-    if (!nodo) return NULL;
-    //asignar valores
+    if (!nodo) return NULL; 
     buildAbstractExpresion(&nodo->base, interpretPrintExpresion);
-
+    nodo->newline = newline;
     if (listaExpresiones) agregarHijo((AbstractExpresion*) nodo, listaExpresiones);
-    return (AbstractExpresion*) nodo;
-}
+    else agregarHijo((AbstractExpresion*) nodo, nuevoListaExpresiones());
+    return (AbstractExpresion*) nodo; }
